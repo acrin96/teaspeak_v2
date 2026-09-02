@@ -24,7 +24,9 @@ SERVICE="${SERVICE:-teaspeak}"
 LOGS_CAP_GIB="${LOGS_CAP_GIB:-25}"
 
 RELEASE_TARBALL_URL="${RELEASE_TARBALL_URL:-https://github.com/acrin96/teaspeak_v2/releases/latest/download/teaspeak_v2_1.4.21-beta-3_linux_amd64.tar.gz}"
-SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Directorio del script. Con 'curl | bash' no hay fichero (BASH_SOURCE vacio): usamos el CWD.
+SRC="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"
+[ -n "$SRC" ] || SRC="$PWD"
 
 say(){ echo -e "\e[1;32m[install]\e[0m $*"; }
 die(){ echo -e "\e[1;31m[install] ERROR:\e[0m $*" >&2; exit 1; }
@@ -200,6 +202,17 @@ if ! systemctl is-active --quiet "$SERVICE"; then
     die "el servicio no arranco. Revisa: journalctl -u $SERVICE -n 60 --no-pager"
 fi
 say "TeaSpeak activo."
+
+# --- reinicio de asentamiento (solo instalacion nueva) ---
+# En el primer arranque con BD nueva, la identidad del servidor (protocol_key) y los datos de
+# instancia recien creados terminan de aplicarse tras un reinicio. Lo hacemos aqui para que la
+# clave de protocolo quede activa de fabrica sin que el usuario reinicie a mano.
+if [ "$UPGRADE" = 0 ]; then
+    say "Reinicio de asentamiento (aplica la identidad/protocol_key)..."
+    systemctl restart "$SERVICE"
+    sleep 6
+    systemctl is-active --quiet "$SERVICE" || die "el servicio no quedo activo tras el reinicio de asentamiento."
+fi
 
 # --- credenciales iniciales (solo instalacion nueva) ---
 if [ "$UPGRADE" = 0 ]; then
