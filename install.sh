@@ -132,14 +132,28 @@ if [ "$UPGRADE" = 0 ]; then
 fi
 
 # --- protocol_key ---
+# Precedencia: PROTOCOL_KEY_B64 (base64) -> protocol_key.txt hallado (sin formato, p.ej. en /root)
+#              -> el ya instalado (upgrade) -> aviso (identidad nueva).
+PK_DST="$INSTALL_DIR/protocol_key.txt"
 if [ -n "${PROTOCOL_KEY_B64:-}" ]; then
     say "Escribiendo protocol_key.txt desde PROTOCOL_KEY_B64 ..."
-    echo "$PROTOCOL_KEY_B64" | base64 -d > "$INSTALL_DIR/protocol_key.txt"
-    chmod 600 "$INSTALL_DIR/protocol_key.txt"
-elif [ ! -f "$INSTALL_DIR/protocol_key.txt" ]; then
-    echo -e "\e[1;33m[install] AVISO:\e[0m no hay protocol_key.txt."
-    echo "  Sube tu clave a $INSTALL_DIR/protocol_key.txt (chmod 600) o reinstala con PROTOCOL_KEY_B64 definido."
-    echo "  Sin ella el servidor generara una identidad nueva (cambia la clave publica del servidor)."
+    echo "$PROTOCOL_KEY_B64" | base64 -d > "$PK_DST"
+    chmod 600 "$PK_DST"
+else
+    PK_SRC=""
+    for cand in "$PWD/protocol_key.txt" "/root/protocol_key.txt" "$SRC/protocol_key.txt"; do
+        if [ -f "$cand" ] && [ "$(readlink -f "$cand" 2>/dev/null)" != "$(readlink -f "$PK_DST" 2>/dev/null)" ]; then
+            PK_SRC="$cand"; break
+        fi
+    done
+    if [ -n "$PK_SRC" ]; then
+        say "Usando protocol_key.txt encontrado en $PK_SRC"
+        install -m 600 "$PK_SRC" "$PK_DST"
+    elif [ ! -f "$PK_DST" ]; then
+        echo -e "\e[1;33m[install] AVISO:\e[0m no hay protocol_key.txt."
+        echo "  Deja tu clave (sin formato) en /root/protocol_key.txt ANTES de instalar, o define PROTOCOL_KEY_B64."
+        echo "  Sin ella el servidor generara una identidad nueva (cambia la clave publica del servidor)."
+    fi
 fi
 
 chown -R "$RUN_USER":"$RUN_USER" "$INSTALL_DIR"
