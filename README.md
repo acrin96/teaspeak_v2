@@ -43,6 +43,16 @@ sudo -u postgres psql -d teaspeak -c "SELECT token,description FROM tokens;"    
 | `scripts/backup.sh` | Backup con `pg_dump` de la base principal + ficheros de runtime, con retención. Ideal para cron diario. |
 | `scripts/logs_retention.sh` | Tope FIFO de tamaño para la base de logs (lo instala `install.sh` en cron horario). |
 
+## Firewall y acceso a PostgreSQL (pgAdmin)
+
+El instalador **aplica el firewall por defecto** (`scripts/firewall.sh`, whitelist en su cabecera): SSH,
+ServerQuery y PostgreSQL quedan abiertos solo a tus IPs; voz y ficheros públicos con *rate-limit*. Si
+`WHITELIST_DB` tiene tu IP, además habilita el acceso remoto a PostgreSQL y podrás conectarte con **pgAdmin**
+(host = IP pública, puerto 5432, base `teaspeak`, usuario `teaspeak`, contraseña de `config.yml`, SSL `prefer`).
+
+- Omitir el firewall en la instalación: `APPLY_FIREWALL=0 bash install.sh`.
+- **Aviso:** SSH solo se admite desde `WHITELIST_SSH`; instala desde una IP de esa lista para no quedarte fuera.
+
 ## La `protocol_key`
 
 Es la identidad del servidor y es **privada**: no está en este repositorio. Apórtala al instalar con
