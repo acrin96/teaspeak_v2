@@ -68,7 +68,7 @@ apt-get install -y -qq \
     postgresql postgresql-contrib libpq5 libsqlite3-0 \
     libnice10 libgupnp-1.2-0 libgupnp-igd-1.0-4 libgssdp-1.2-0 libsoup2.4-1 \
     libglib2.0-0 libgnutls30 libxml2 libpcre3 libbrotli1 libpsl5 libicu67 \
-    ca-certificates coreutils cron >/dev/null
+    ca-certificates coreutils cron iptables iptables-persistent >/dev/null
 systemctl enable --now cron >/dev/null 2>&1 || true
 
 say "Arrancando PostgreSQL..."
@@ -210,6 +210,23 @@ BK_LINE="30 4 * * * TEASPEAK_DIR=$INSTALL_DIR TEASPEAK_DB=$DB_NAME TEASPEAK_LOGS
 ( ( crontab -l 2>/dev/null || true ) | grep -vE "$INSTALL_DIR/scripts/(logs_retention|backup)\.sh"; echo "$RET_LINE"; echo "$BK_LINE" ) | crontab - || \
     echo -e "\e[1;33m[install] AVISO:\e[0m no pude instalar los crons; añadelos a mano."
 
+# --- firewall (activado por defecto; usa la whitelist de scripts/firewall.sh) ---
+# Se aplica ANTES de arrancar TeaSpeak: firewall.sh reinicia PostgreSQL para activar el
+# acceso remoto (listen_addresses) sin cortarle la conexion al servidor de voz.
+if [ "${APPLY_FIREWALL:-1}" = 1 ] && [ -f "$INSTALL_DIR/scripts/firewall.sh" ]; then
+    say "Aplicando firewall (SSH/ServerQuery/PostgreSQL solo whitelist; voz/ficheros con rate-limit)..."
+    echo "  Whitelist SSH:   ${WHITELIST_SSH:-por defecto en firewall.sh}"
+    echo "  Whitelist Query: ${WHITELIST_QUERY:-por defecto en firewall.sh}"
+    echo "  Whitelist BD:    ${WHITELIST_DB:-por defecto en firewall.sh}"
+    if bash "$INSTALL_DIR/scripts/firewall.sh"; then
+        say "Firewall aplicado. PostgreSQL accesible en remoto solo para tu whitelist (pgAdmin)."
+    else
+        echo -e "\e[1;33m[install] AVISO:\e[0m el firewall no se aplico limpio; revisalo: bash $INSTALL_DIR/scripts/firewall.sh"
+    fi
+else
+    say "Firewall NO aplicado (APPLY_FIREWALL=0). Lanzalo tu: bash $INSTALL_DIR/scripts/firewall.sh"
+fi
+
 # --- arranque ---
 say "Arrancando el servidor..."
 systemctl restart "$SERVICE"
@@ -256,9 +273,15 @@ if [ "$UPGRADE" = 0 ]; then
     echo "  Scripts en $INSTALL_DIR/scripts/ :"
     echo "     backup.sh        -> backup diario ya programado (cron 04:30)"
     echo "     logs_retention.sh-> tope de logs ya programado (cron horario)"
-    echo "     firewall.sh      -> NO se ejecuta solo (riesgo de bloquear SSH)."
-    echo "                         Revisa las IPs de whitelist y lanzalo tu:"
-    echo "                         sudo WHITELIST_SSH=\"TU_IP\" WHITELIST_QUERY=\"TU_IP\" WHITELIST_DB=\"TU_IP\" bash $INSTALL_DIR/scripts/firewall.sh"
+    if [ "${APPLY_FIREWALL:-1}" = 1 ]; then
+        echo "     firewall.sh      -> aplicado (SSH/Query/PostgreSQL solo tu whitelist)."
+        echo "                         PostgreSQL accesible desde tu pgAdmin: host=<IP publica> puerto=5432"
+        echo "                         db=$DB_NAME usuario=$DB_USER (contrasena en config.yml)"
+        echo "                         Para reaplicar/ajustar IPs: bash $INSTALL_DIR/scripts/firewall.sh"
+    else
+        echo "     firewall.sh      -> NO aplicado. Lanzalo tu cuando quieras:"
+        echo "                         sudo WHITELIST_SSH=\"TU_IP\" WHITELIST_QUERY=\"TU_IP\" WHITELIST_DB=\"TU_IP\" bash $INSTALL_DIR/scripts/firewall.sh"
+    fi
     echo "  Nota: la mitigacion anti-crash (validacion DER del handshake) va compilada en el"
     echo "        binario; no hay script 'anticrash' aparte."
 fi
