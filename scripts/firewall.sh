@@ -99,16 +99,21 @@ else
     PG_CONF="$(find /etc/postgresql -name postgresql.conf 2>/dev/null | head -1)"
     PG_HBA="$(find /etc/postgresql -name pg_hba.conf 2>/dev/null | head -1)"
     if [[ -n "$PG_CONF" && -n "$PG_HBA" ]]; then
+        PG_NEEDS_RESTART=0
         if ! grep -qE "^[[:space:]]*listen_addresses[[:space:]]*=[[:space:]]*'\\*'" "$PG_CONF"; then
             sed -i "s/^[[:space:]]*#\?[[:space:]]*listen_addresses[[:space:]]*=.*/listen_addresses = '*'/" "$PG_CONF"
             grep -qE "^listen_addresses" "$PG_CONF" || echo "listen_addresses = '*'" >> "$PG_CONF"
+            PG_NEEDS_RESTART=1   # listen_addresses solo aplica tras un restart (no reload)
         fi
         for ip in $WHITELIST_DB; do
             if ! grep -qE "^host[[:space:]]+all[[:space:]]+all[[:space:]]+$ip/32" "$PG_HBA"; then
                 echo "host    all    all    $ip/32    scram-sha-256" >> "$PG_HBA"
+                PG_NEEDS_RESTART=1
             fi
         done
-        systemctl reload postgresql 2>/dev/null || systemctl restart postgresql 2>/dev/null
+        if [[ "$PG_NEEDS_RESTART" = 1 ]]; then
+            systemctl restart postgresql 2>/dev/null || log_info "reinicia postgresql a mano para aplicar los cambios"
+        fi
         log_ok "PostgreSQL escucha remoto habilitado solo para: $WHITELIST_DB"
     else
         log_info "No encontre postgresql.conf/pg_hba.conf; la regla iptables queda, pero habilita el listen manualmente."
