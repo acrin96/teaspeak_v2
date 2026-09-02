@@ -28,8 +28,17 @@ SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 say(){ echo -e "\e[1;32m[install]\e[0m $*"; }
 die(){ echo -e "\e[1;31m[install] ERROR:\e[0m $*" >&2; exit 1; }
+# psql como postgres desde /tmp (evita el aviso 'could not change directory' cuando el CWD
+# es un directorio al que el usuario postgres no puede entrar, p.ej. /root/...)
+PSQL(){ ( cd /tmp && PSQL "$@" ); }
 
 [ "$(id -u)" = 0 ] || die "ejecuta como root."
+
+# silenciar el aviso 'sudo: unable to resolve host <hostname>' anadiendo el hostname a /etc/hosts
+HN="$(hostname 2>/dev/null || true)"
+if [ -n "$HN" ] && ! grep -q "[[:space:]]$HN\$" /etc/hosts 2>/dev/null && ! grep -q "[[:space:]]$HN[[:space:]]" /etc/hosts 2>/dev/null; then
+    echo "127.0.1.1 $HN" >> /etc/hosts 2>/dev/null || true
+fi
 
 if [ -r /etc/os-release ]; then . /etc/os-release; fi
 if [ "${ID:-}" != "debian" ] || [ "${VERSION_ID:-}" != "11" ]; then
@@ -57,7 +66,8 @@ apt-get install -y -qq \
     postgresql postgresql-contrib libpq5 libsqlite3-0 \
     libnice10 libgupnp-1.2-0 libgupnp-igd-1.0-4 libgssdp-1.2-0 libsoup2.4-1 \
     libglib2.0-0 libgnutls30 libxml2 libpcre3 libbrotli1 libpsl5 libicu67 \
-    ca-certificates coreutils >/dev/null
+    ca-certificates coreutils cron >/dev/null
+systemctl enable --now cron >/dev/null 2>&1 || true
 
 say "Arrancando PostgreSQL..."
 systemctl enable --now postgresql >/dev/null 2>&1 || die "no pude arrancar postgresql."
@@ -76,10 +86,10 @@ UPGRADE=0
 if [ "$UPGRADE" = 0 ]; then
     DB_PASS="$(head -c 32 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 24)"
     say "Configurando rol PostgreSQL '$DB_USER'..."
-    if sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='$DB_USER'" | grep -q 1; then
-        sudo -u postgres psql -c "ALTER ROLE \"$DB_USER\" LOGIN PASSWORD '$DB_PASS';" >/dev/null
+    if PSQL -tAc "SELECT 1 FROM pg_roles WHERE rolname='$DB_USER'" | grep -q 1; then
+        PSQL -c "ALTER ROLE \"$DB_USER\" LOGIN PASSWORD '$DB_PASS';" >/dev/null
     else
-        sudo -u postgres psql -c "CREATE ROLE \"$DB_USER\" LOGIN PASSWORD '$DB_PASS';" >/dev/null
+        PSQL -c "CREATE ROLE \"$DB_USER\" LOGIN PASSWORD '$DB_PASS';" >/dev/null
     fi
 else
     say "config.yml existente detectado: modo upgrade (se conserva config y credenciales)."
@@ -87,9 +97,9 @@ fi
 
 # --- bases de datos ---
 for db in "$DB_NAME" "$LOGS_DB"; do
-    if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='$db'" | grep -q 1; then
+    if ! PSQL -tAc "SELECT 1 FROM pg_database WHERE datname='$db'" | grep -q 1; then
         say "Creando base de datos '$db'..."
-        sudo -u postgres psql -c "CREATE DATABASE \"$db\" OWNER \"$DB_USER\";" >/dev/null
+        PSQL -c "CREATE DATABASE \"$db\" OWNER \"$DB_USER\";" >/dev/null
     fi
 done
 
@@ -153,7 +163,8 @@ systemctl enable "$SERVICE" >/dev/null 2>&1
 # --- cron de retencion (tope FIFO de la base de logs) ---
 say "Instalando cron de retencion de logs (tope ${LOGS_CAP_GIB} GiB)..."
 CRON_LINE="0 * * * * $INSTALL_DIR/logs_retention.sh $LOGS_DB $LOGS_CAP_GIB >> /var/log/teaspeak_logs_retention.log 2>&1"
-( crontab -l 2>/dev/null | grep -v "$INSTALL_DIR/logs_retention.sh"; echo "$CRON_LINE" ) | crontab -
+( ( crontab -l 2>/dev/null || true ) | grep -v "$INSTALL_DIR/logs_retention.sh"; echo "$CRON_LINE" ) | crontab - || \
+    echo -e "\e[1;33m[install] AVISO:\e[0m no pude instalar el cron de retencion; añádelo a mano: $CRON_LINE"
 
 # --- arranque ---
 say "Arrancando el servidor..."
