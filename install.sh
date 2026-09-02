@@ -23,16 +23,31 @@ LOGS_DB="${LOGS_DB:-teaspeak_logs}"
 SERVICE="${SERVICE:-teaspeak}"
 LOGS_CAP_GIB="${LOGS_CAP_GIB:-25}"
 
+RELEASE_TARBALL_URL="${RELEASE_TARBALL_URL:-https://github.com/acrin96/teaspeak_v2/releases/latest/download/teaspeak_v2_1.4.21-beta-3_linux_amd64.tar.gz}"
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 say(){ echo -e "\e[1;32m[install]\e[0m $*"; }
 die(){ echo -e "\e[1;31m[install] ERROR:\e[0m $*" >&2; exit 1; }
 
 [ "$(id -u)" = 0 ] || die "ejecuta como root."
-[ -f "$SRC/TeaSpeakServer" ] || die "no encuentro TeaSpeakServer junto a install.sh."
+
 if [ -r /etc/os-release ]; then . /etc/os-release; fi
 if [ "${ID:-}" != "debian" ] || [ "${VERSION_ID:-}" != "11" ]; then
     echo "AVISO: plataforma soportada = Debian 11. Detectado: ${PRETTY_NAME:-desconocido}. Continuo bajo tu responsabilidad."
+fi
+
+# --- bootstrap: si el binario no esta junto al script, descargar el paquete de la release ---
+if [ ! -f "$SRC/TeaSpeakServer" ]; then
+    say "No encuentro el binario junto al script; descargando el paquete de la release..."
+    export DEBIAN_FRONTEND=noninteractive
+    command -v curl >/dev/null 2>&1 || { apt-get update -qq && apt-get install -y -qq curl; }
+    command -v tar  >/dev/null 2>&1 || { apt-get update -qq && apt-get install -y -qq tar; }
+    BOOT_TMP="$(mktemp -d)"
+    curl -fsSL "$RELEASE_TARBALL_URL" -o "$BOOT_TMP/bundle.tar.gz" || die "no pude descargar el paquete desde $RELEASE_TARBALL_URL"
+    tar -xzf "$BOOT_TMP/bundle.tar.gz" -C "$BOOT_TMP" || die "no pude extraer el paquete descargado."
+    SRC="$BOOT_TMP/teaspeak_v2_bundle"
+    [ -f "$SRC/TeaSpeakServer" ] || die "el paquete descargado no contiene TeaSpeakServer."
+    say "Paquete descargado y extraido en $SRC"
 fi
 
 say "Instalando dependencias del sistema (apt)..."
