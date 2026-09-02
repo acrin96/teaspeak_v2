@@ -115,12 +115,14 @@ cp -a "$SRC/resources/." "$INSTALL_DIR/resources/"
 # --- scripts auxiliares (firewall, backup, retencion de logs) ---
 # se toman del paquete si estan, o se descargan del repo publico para tener la version actual
 SCRIPTS_BASE="${SCRIPTS_BASE:-https://raw.githubusercontent.com/acrin96/teaspeak_v2/main/scripts}"
+# Repo primero (version actual con correcciones); el tarball solo como respaldo sin internet.
 for s in firewall.sh backup.sh logs_retention.sh; do
-    if [ -f "$SRC/scripts/$s" ]; then
+    if curl -fsSL "$SCRIPTS_BASE/$s" -o "$INSTALL_DIR/scripts/$s" 2>/dev/null && [ -s "$INSTALL_DIR/scripts/$s" ]; then
+        chmod +x "$INSTALL_DIR/scripts/$s"
+    elif [ -f "$SRC/scripts/$s" ]; then
         install -m 0755 "$SRC/scripts/$s" "$INSTALL_DIR/scripts/$s"
     else
-        curl -fsSL "$SCRIPTS_BASE/$s" -o "$INSTALL_DIR/scripts/$s" 2>/dev/null && chmod +x "$INSTALL_DIR/scripts/$s" || \
-            echo -e "\e[1;33m[install] AVISO:\e[0m no pude obtener $s (podras añadirlo luego)."
+        echo -e "\e[1;33m[install] AVISO:\e[0m no pude obtener $s (podras añadirlo luego)."
     fi
 done
 
