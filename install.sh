@@ -107,7 +107,7 @@ done
 
 # --- directorios y ficheros ---
 say "Desplegando en $INSTALL_DIR ..."
-mkdir -p "$INSTALL_DIR"/{libs,resources,providers,certs,files,logs,crash_dumps,scripts}
+mkdir -p "$INSTALL_DIR"/{libs,resources,providers,certs,files,logs,crash_dumps,scripts,geoloc}
 install -m 0755 "$SRC/TeaSpeakServer" "$INSTALL_DIR/TeaSpeakServer"
 cp -a "$SRC/libs/." "$INSTALL_DIR/libs/"
 cp -a "$SRC/resources/." "$INSTALL_DIR/resources/"
@@ -123,6 +123,22 @@ for s in firewall.sh backup.sh logs_retention.sh; do
             echo -e "\e[1;33m[install] AVISO:\e[0m no pude obtener $s (podras añadirlo luego)."
     fi
 done
+
+# --- geoloc (bases de geolocalizacion, asset aparte de la release) ---
+GEOLOC_URL="${GEOLOC_URL:-https://github.com/acrin96/teaspeak_v2/releases/latest/download/teaspeak_v2_geoloc.tar.gz}"
+if [ -d "$SRC/geoloc" ] && [ -f "$SRC/geoloc/IP2Location.CSV" ]; then
+    cp -a "$SRC/geoloc/." "$INSTALL_DIR/geoloc/"
+    say "Geoloc tomada del paquete."
+elif [ ! -f "$INSTALL_DIR/geoloc/IP2Location.CSV" ]; then
+    say "Descargando bases de geolocalizacion..."
+    GTMP="$(mktemp -d)"
+    if curl -fsSL "$GEOLOC_URL" -o "$GTMP/geoloc.tar.gz" 2>/dev/null && tar -xzf "$GTMP/geoloc.tar.gz" -C "$INSTALL_DIR" 2>/dev/null; then
+        say "Geoloc instalada en $INSTALL_DIR/geoloc/"
+    else
+        echo -e "\e[1;33m[install] AVISO:\e[0m no pude obtener geoloc; la geolocalizacion usara el pais de fallback."
+    fi
+    rm -rf "$GTMP"
+fi
 
 # --- config ---
 if [ "$UPGRADE" = 0 ]; then
