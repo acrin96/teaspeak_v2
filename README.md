@@ -9,21 +9,27 @@ fuente es privado.
 En un Debian 11 limpio, como `root`:
 
 ```bash
-cd /root
-curl -fsSLO https://github.com/acrin96/teaspeak_v2/releases/latest/download/teaspeak_v2_1.4.21-beta-3_linux_amd64.tar.gz
-tar -xzf teaspeak_v2_1.4.21-beta-3_linux_amd64.tar.gz
-cd teaspeak_v2_bundle
-sudo bash ./install.sh
+curl -fsSL https://raw.githubusercontent.com/acrin96/teaspeak_v2/main/install.sh | sudo bash
 ```
 
-El instalador instala dependencias, crea el rol y las dos bases PostgreSQL (principal + logs), despliega en
-`/opt/teaspeak`, genera la configuración, registra el servicio `systemd` y el cron de retención, y arranca el
-servidor. Es **idempotente**: re-ejecútalo para actualizar sin perder config ni datos.
+Ese único comando lo hace **todo**: descarga el binario, instala dependencias, crea el rol y las dos bases
+PostgreSQL (principal + logs), despliega en `/opt/teaspeak`, genera la configuración, instala los scripts
+(`firewall.sh`, `backup.sh`, `logs_retention.sh`), programa el backup diario y la retención de logs, registra
+el servicio `systemd`, arranca el servidor **e imprime al final la contraseña de `serveradmin` y la clave de
+privilegio del grupo Server Admin**. Es **idempotente**: re-ejecútalo para actualizar sin perder config ni datos.
 
-La contraseña inicial de `serveradmin` y la clave de privilegio del grupo Server Admin aparecen en el log:
+> Con la clave de protocolo de tu servidor:
+> ```bash
+> curl -fsSL https://raw.githubusercontent.com/acrin96/teaspeak_v2/main/install.sh -o install.sh
+> sudo PROTOCOL_KEY_B64="$(base64 -w0 protocol_key.txt)" bash install.sh
+> ```
+
+Si más adelante necesitas las credenciales de nuevo:
 
 ```bash
-journalctl -u teaspeak | grep -iE 'serveradmin|token|privilege'
+cd /tmp
+sudo -u postgres psql -d teaspeak -c "SELECT username,password FROM queries;"   # serveradmin
+sudo -u postgres psql -d teaspeak -c "SELECT token,description FROM tokens;"     # privilege key
 ```
 
 ## Scripts
