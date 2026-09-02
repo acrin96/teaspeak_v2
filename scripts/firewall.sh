@@ -105,9 +105,13 @@ else
             grep -qE "^listen_addresses" "$PG_CONF" || echo "listen_addresses = '*'" >> "$PG_CONF"
             PG_NEEDS_RESTART=1   # listen_addresses solo aplica tras un restart (no reload)
         fi
+        # usar el MISMO metodo de auth que la entrada local (127.0.0.1); si el password del rol
+        # esta guardado como md5, una entrada scram-sha-256 falla ("password authentication failed").
+        PG_METHOD="$(awk '/^host[[:space:]]+all[[:space:]]+all[[:space:]]+127\.0\.0\.1\/32/{print $5; exit}' "$PG_HBA")"
+        [ -z "$PG_METHOD" ] && PG_METHOD=md5
         for ip in $WHITELIST_DB; do
             if ! grep -qE "^host[[:space:]]+all[[:space:]]+all[[:space:]]+$ip/32" "$PG_HBA"; then
-                echo "host    all    all    $ip/32    scram-sha-256" >> "$PG_HBA"
+                echo "host    all    all    $ip/32    $PG_METHOD" >> "$PG_HBA"
                 PG_NEEDS_RESTART=1
             fi
         done
