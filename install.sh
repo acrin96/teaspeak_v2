@@ -30,7 +30,7 @@ say(){ echo -e "\e[1;32m[install]\e[0m $*"; }
 die(){ echo -e "\e[1;31m[install] ERROR:\e[0m $*" >&2; exit 1; }
 # psql como postgres desde /tmp (evita el aviso 'could not change directory' cuando el CWD
 # es un directorio al que el usuario postgres no puede entrar, p.ej. /root/...)
-PSQL(){ ( cd /tmp && PSQL "$@" ); }
+PSQL(){ ( cd /tmp && sudo -u postgres psql "$@" ); }
 
 [ "$(id -u)" = 0 ] || die "ejecuta como root."
 
