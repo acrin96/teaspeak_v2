@@ -58,6 +58,37 @@ ServerQuery y PostgreSQL quedan abiertos solo a tus IPs; voz y ficheros público
 Es la identidad del servidor y es **privada**: no está en este repositorio. Apórtala al instalar con
 `PROTOCOL_KEY_B64` (contenido en base64) o cópiala manualmente a `/opt/teaspeak/protocol_key.txt` (`chmod 600`).
 
+## Migrar desde la versión anterior (SQLite → PostgreSQL)
+
+Si vienes de una instalación TeaSpeak anterior basada en **SQLite**, puedes traer todos tus datos a esta versión
+PostgreSQL: servidores virtuales, canales, grupos, clientes, permisos, bans, tokens, cuentas ServerQuery y los
+ficheros (**iconos**, avatares, conversaciones).
+
+**Requisito:** un backup `.tar.gz` de tu versión anterior que contenga `TeaData.sqlite` y la carpeta `files/`
+(es el formato que genera `backup.sh`).
+
+```bash
+# 1) Instala primero esta versión (crea el esquema PostgreSQL vacío)
+curl -fsSL https://raw.githubusercontent.com/acrin96/teaspeak_v2/main/install.sh | bash
+
+# 2) Sube tu backup a la VPS, p.ej. /root/teaspeak_backup.tar.gz
+
+# 3) Descarga y ejecuta la migración
+curl -fsSLO https://raw.githubusercontent.com/acrin96/teaspeak_v2/main/migration/migrate.sh
+sudo bash migrate.sh /root/teaspeak_backup.tar.gz
+```
+
+El script para el servidor, ajusta los tipos del esquema (`TEXT`/`BIGINT`, porque SQLite no impone longitudes),
+importa todas las tablas, copia `files/` (iconos incluidos), reajusta las secuencias de IDs, reinicia y muestra
+un resumen con los recuentos migrados.
+
+- **Reemplaza** los datos por defecto de la instalación limpia por los de tu backup, y **conserva** el
+  `config.yml` nuevo (PostgreSQL + claves nuevas). Las contraseñas de `serveradmin`/ServerQuery pasan a ser las
+  de tu producción anterior.
+- Tras migrar, tus servidores virtuales usan sus puertos de producción: asegúrate de que el rango de voz del
+  firewall (`UDP_PORTS` en `firewall.sh`) los cubre, o ajústalo.
+- Motor de migración: `migration/migrate.sh` + `migration/migrate.py` (el `.sh` descarga el `.py` si falta).
+
 ## Manual
 
 Manual completo de instalación y uso: ver la sección *Releases* / el enlace del manual.
