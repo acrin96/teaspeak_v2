@@ -105,11 +105,22 @@ done
 
 # --- directorios y ficheros ---
 say "Desplegando en $INSTALL_DIR ..."
-mkdir -p "$INSTALL_DIR"/{libs,resources,providers,certs,files,logs,crash_dumps}
+mkdir -p "$INSTALL_DIR"/{libs,resources,providers,certs,files,logs,crash_dumps,scripts}
 install -m 0755 "$SRC/TeaSpeakServer" "$INSTALL_DIR/TeaSpeakServer"
 cp -a "$SRC/libs/." "$INSTALL_DIR/libs/"
 cp -a "$SRC/resources/." "$INSTALL_DIR/resources/"
-install -m 0755 "$SRC/scripts/logs_retention.sh" "$INSTALL_DIR/logs_retention.sh"
+
+# --- scripts auxiliares (firewall, backup, retencion de logs) ---
+# se toman del paquete si estan, o se descargan del repo publico para tener la version actual
+SCRIPTS_BASE="${SCRIPTS_BASE:-https://raw.githubusercontent.com/acrin96/teaspeak_v2/main/scripts}"
+for s in firewall.sh backup.sh logs_retention.sh; do
+    if [ -f "$SRC/scripts/$s" ]; then
+        install -m 0755 "$SRC/scripts/$s" "$INSTALL_DIR/scripts/$s"
+    else
+        curl -fsSL "$SCRIPTS_BASE/$s" -o "$INSTALL_DIR/scripts/$s" 2>/dev/null && chmod +x "$INSTALL_DIR/scripts/$s" || \
+            echo -e "\e[1;33m[install] AVISO:\e[0m no pude obtener $s (podras añadirlo luego)."
+    fi
+done
 
 # --- config ---
 if [ "$UPGRADE" = 0 ]; then
@@ -160,19 +171,51 @@ EOF
 systemctl daemon-reload
 systemctl enable "$SERVICE" >/dev/null 2>&1
 
-# --- cron de retencion (tope FIFO de la base de logs) ---
-say "Instalando cron de retencion de logs (tope ${LOGS_CAP_GIB} GiB)..."
-CRON_LINE="0 * * * * $INSTALL_DIR/logs_retention.sh $LOGS_DB $LOGS_CAP_GIB >> /var/log/teaspeak_logs_retention.log 2>&1"
-( ( crontab -l 2>/dev/null || true ) | grep -v "$INSTALL_DIR/logs_retention.sh"; echo "$CRON_LINE" ) | crontab - || \
-    echo -e "\e[1;33m[install] AVISO:\e[0m no pude instalar el cron de retencion; añádelo a mano: $CRON_LINE"
+# --- crons: retencion de logs (horario) + backup (diario) ---
+say "Instalando crons (retencion de logs ${LOGS_CAP_GIB} GiB + backup diario)..."
+RET_LINE="0 * * * * $INSTALL_DIR/scripts/logs_retention.sh $LOGS_DB $LOGS_CAP_GIB >> /var/log/teaspeak_logs_retention.log 2>&1"
+BK_LINE="30 4 * * * TEASPEAK_DIR=$INSTALL_DIR TEASPEAK_DB=$DB_NAME TEASPEAK_LOGS_DB=$LOGS_DB $INSTALL_DIR/scripts/backup.sh >> /var/log/teaspeak_backup.log 2>&1"
+( ( crontab -l 2>/dev/null || true ) | grep -vE "$INSTALL_DIR/scripts/(logs_retention|backup)\.sh"; echo "$RET_LINE"; echo "$BK_LINE" ) | crontab - || \
+    echo -e "\e[1;33m[install] AVISO:\e[0m no pude instalar los crons; añadelos a mano."
 
 # --- arranque ---
 say "Arrancando el servidor..."
 systemctl restart "$SERVICE"
 sleep 8
-if systemctl is-active --quiet "$SERVICE"; then
-    say "TeaSpeak activo. Estado: systemctl status $SERVICE"
-    [ "$UPGRADE" = 0 ] && say "Revisa el log para la contrasena inicial de 'serveradmin' y la clave de privilegio: journalctl -u $SERVICE | grep -iE 'serveradmin|token'"
-else
+if ! systemctl is-active --quiet "$SERVICE"; then
     die "el servicio no arranco. Revisa: journalctl -u $SERVICE -n 60 --no-pager"
+fi
+say "TeaSpeak activo."
+
+# --- credenciales iniciales (solo instalacion nueva) ---
+if [ "$UPGRADE" = 0 ]; then
+    QPW=""; TKN=""
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+        QPW=$(PSQL -d "$DB_NAME" -tAc "SELECT password FROM queries WHERE username='serveradmin' ORDER BY server LIMIT 1;" 2>/dev/null | tr -d '[:space:]')
+        TKN=$(PSQL -d "$DB_NAME" -tAc "SELECT token FROM tokens ORDER BY created DESC LIMIT 1;" 2>/dev/null | tr -d '[:space:]')
+        [ -n "$QPW" ] && [ -n "$TKN" ] && break
+        sleep 2
+    done
+    echo ""
+    echo -e "\e[1;32m===================== CREDENCIALES =====================\e[0m"
+    echo "  ServerQuery (YaTQA/bots):"
+    echo "     usuario:   serveradmin"
+    echo "     password:  ${QPW:-<vacio: revisa 'SELECT * FROM queries;'>}"
+    echo "     puerto:    10101 (TCP)"
+    echo ""
+    echo "  Clave de privilegio (grupo Server Admin):"
+    echo "     ${TKN:-<vacio: revisa 'SELECT * FROM tokens;'>}"
+    echo ""
+    echo "  Base de datos (en $INSTALL_DIR/config.yml -> general.database.url):"
+    echo "     usuario: $DB_USER   base: $DB_NAME   (contrasena embebida en la url)"
+    echo -e "\e[1;32m========================================================\e[0m"
+    echo ""
+    echo "  Scripts en $INSTALL_DIR/scripts/ :"
+    echo "     backup.sh        -> backup diario ya programado (cron 04:30)"
+    echo "     logs_retention.sh-> tope de logs ya programado (cron horario)"
+    echo "     firewall.sh      -> NO se ejecuta solo (riesgo de bloquear SSH)."
+    echo "                         Revisa las IPs de whitelist y lanzalo tu:"
+    echo "                         sudo WHITELIST_SSH=\"TU_IP\" WHITELIST_QUERY=\"TU_IP\" WHITELIST_DB=\"TU_IP\" bash $INSTALL_DIR/scripts/firewall.sh"
+    echo "  Nota: la mitigacion anti-crash (validacion DER del handshake) va compilada en el"
+    echo "        binario; no hay script 'anticrash' aparte."
 fi
