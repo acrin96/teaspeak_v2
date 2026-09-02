@@ -18,11 +18,13 @@ PostgreSQL (principal + logs), despliega en `/opt/teaspeak`, genera la configura
 el servicio `systemd`, arranca el servidor **e imprime al final la contraseña de `serveradmin` y la clave de
 privilegio del grupo Server Admin**. Es **idempotente**: re-ejecútalo para actualizar sin perder config ni datos.
 
-> Con la clave de protocolo de tu servidor:
+> **Con la clave de protocolo de tu servidor:** deja tu `protocol_key.txt` (sin formato) en `/root/`
+> **antes** de instalar; el instalador la detecta y la usa:
 > ```bash
-> curl -fsSL https://raw.githubusercontent.com/acrin96/teaspeak_v2/main/install.sh -o install.sh
-> sudo PROTOCOL_KEY_B64="$(base64 -w0 protocol_key.txt)" bash install.sh
+> # copia tu protocol_key.txt a /root/protocol_key.txt y luego:
+> curl -fsSL https://raw.githubusercontent.com/acrin96/teaspeak_v2/main/install.sh | bash
 > ```
+> (Alternativa: `PROTOCOL_KEY_B64="$(base64 -w0 protocol_key.txt)" bash install.sh`.)
 
 Si más adelante necesitas las credenciales de nuevo:
 
