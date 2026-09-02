@@ -48,7 +48,6 @@ VOICE_NEW_PER_SEC="${VOICE_NEW_PER_SEC:-10}"
 VOICE_NEW_BURST="${VOICE_NEW_BURST:-30}"
 # ======================================================================
 
-clear
 echo -e "${CYAN}${BOLD}========================================================"
 echo -e "        FIREWALL TEASPEAK v2 (PostgreSQL / Debian 11)"
 echo -e "========================================================${NC}"
