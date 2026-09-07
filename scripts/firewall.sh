@@ -27,7 +27,7 @@ step()     { echo -e "\n${CYAN}>>>${NC} $1"; }
 WHITELIST_SSH="${WHITELIST_SSH:-172.216.237.49}"
 
 # IPs con acceso al ServerQuery (10101). El query queda CERRADO al publico.
-WHITELIST_QUERY="${WHITELIST_QUERY:-172.216.237.49 23.26.135.58}"
+WHITELIST_QUERY="${WHITELIST_QUERY:-172.216.237.49}"
 
 # IPs con acceso a PostgreSQL (5432) de forma remota. Vacio = BD solo en localhost.
 WHITELIST_DB="${WHITELIST_DB:-172.216.237.49}"
