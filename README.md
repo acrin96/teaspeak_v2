@@ -40,6 +40,7 @@ sudo -u postgres psql -d teaspeak -c "SELECT token,description FROM tokens;"    
 |---|---|
 | `install.sh` | Instalador / actualizador. |
 | `scripts/firewall.sh` | Firewall iptables: SSH, ServerQuery y PostgreSQL solo para tu whitelist; voz y ficheros públicos con rate-limit. |
+| `scripts/sysctl_tuning.sh` | Tuning de red: sube los buffers UDP de recepción y el backlog del kernel para evitar "receive buffer errors" (Packet Resend Failed) en la voz bajo carga. |
 | `scripts/backup.sh` | Backup con `pg_dump` de la base principal + ficheros de runtime, con retención. Ideal para cron diario. |
 | `scripts/logs_retention.sh` | Tope FIFO de tamaño para la base de logs (lo instala `install.sh` en cron horario). |
 

@@ -116,7 +116,7 @@ cp -a "$SRC/resources/." "$INSTALL_DIR/resources/"
 # se toman del paquete si estan, o se descargan del repo publico para tener la version actual
 SCRIPTS_BASE="${SCRIPTS_BASE:-https://raw.githubusercontent.com/acrin96/teaspeak_v2/main/scripts}"
 # Repo primero (version actual con correcciones); el tarball solo como respaldo sin internet.
-for s in firewall.sh backup.sh logs_retention.sh; do
+for s in firewall.sh backup.sh logs_retention.sh sysctl_tuning.sh; do
     if curl -fsSL "$SCRIPTS_BASE/$s" -o "$INSTALL_DIR/scripts/$s" 2>/dev/null && [ -s "$INSTALL_DIR/scripts/$s" ]; then
         chmod +x "$INSTALL_DIR/scripts/$s"
     elif [ -f "$SRC/scripts/$s" ]; then
@@ -211,6 +211,14 @@ RET_LINE="0 * * * * $INSTALL_DIR/scripts/logs_retention.sh $LOGS_DB $LOGS_CAP_GI
 BK_LINE="30 4 * * * TEASPEAK_DIR=$INSTALL_DIR TEASPEAK_DB=$DB_NAME TEASPEAK_LOGS_DB=$LOGS_DB $INSTALL_DIR/scripts/backup.sh >> /var/log/teaspeak_backup.log 2>&1"
 ( ( crontab -l 2>/dev/null || true ) | grep -vE "$INSTALL_DIR/scripts/(logs_retention|backup)\.sh"; echo "$RET_LINE"; echo "$BK_LINE" ) | crontab - || \
     echo -e "\e[1;33m[install] AVISO:\e[0m no pude instalar los crons; añadelos a mano."
+
+# --- tuning de red (buffers UDP de voz) ---
+# Evita "receive buffer errors" / "Packet Resend Failed" bajo carga de voz.
+# Se aplica ANTES de arrancar TeaSpeak para que el servicio cree sus sockets con buffer grande.
+if [ -f "$INSTALL_DIR/scripts/sysctl_tuning.sh" ]; then
+    say "Aplicando tuning de red (buffers UDP de voz)..."
+    bash "$INSTALL_DIR/scripts/sysctl_tuning.sh" || echo -e "\e[1;33m[install] AVISO:\e[0m no pude aplicar el sysctl tuning; hazlo a mano."
+fi
 
 # --- firewall (activado por defecto; usa la whitelist de scripts/firewall.sh) ---
 # Se aplica ANTES de arrancar TeaSpeak: firewall.sh reinicia PostgreSQL para activar el
