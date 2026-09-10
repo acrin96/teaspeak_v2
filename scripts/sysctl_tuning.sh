@@ -18,11 +18,11 @@ set -uo pipefail
 CONF=/etc/sysctl.d/99-teaspeak-voice.conf
 cat > "$CONF" <<'EOF'
 # Gestionado por teaspeak_v2 (scripts/sysctl_tuning.sh). Buffers de red para la voz UDP.
-net.core.rmem_max = 16777216
-net.core.rmem_default = 1048576
-net.core.wmem_max = 4194304
-net.core.wmem_default = 1048576
-net.core.netdev_max_backlog = 5000
+net.core.rmem_max = 33554432
+net.core.rmem_default = 4194304
+net.core.wmem_max = 16777216
+net.core.wmem_default = 2097152
+net.core.netdev_max_backlog = 20000
 EOF
 
 sysctl -p "$CONF" >/dev/null 2>&1 || sysctl --system >/dev/null 2>&1 || true

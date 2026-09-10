@@ -46,6 +46,9 @@ SSH_PORT="${SSH_PORT:-22}"
 FILES_CONNLIMIT="${FILES_CONNLIMIT:-10}"   # conexiones concurrentes por IP en ficheros
 VOICE_NEW_PER_SEC="${VOICE_NEW_PER_SEC:-10}"
 VOICE_NEW_BURST="${VOICE_NEW_BURST:-30}"
+# 1 = voz FUERA de conntrack (recomendado a escala; sin rate-limit per-IP).
+# 0 = rate-limit legacy per-srcip (bloquea clientes que comparten IP/CGNAT).
+VOICE_NOTRACK="${VOICE_NOTRACK:-1}"
 # ======================================================================
 
 echo -e "${CYAN}${BOLD}========================================================"
@@ -54,6 +57,7 @@ echo -e "========================================================${NC}"
 
 step "Politicas por defecto (rechazar todo lo entrante no autorizado)"
 iptables -F; iptables -X
+iptables -t raw -F; iptables -t raw -X
 iptables -P INPUT DROP; iptables -P FORWARD DROP; iptables -P OUTPUT ACCEPT
 log_ok "INPUT/FORWARD = DROP, OUTPUT = ACCEPT"
 
