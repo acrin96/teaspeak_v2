@@ -9,6 +9,10 @@
 # aparece como "You dropped (Packet Resend Failed)" y en los logs como
 # "receive buffer errors" (netstat -su) + "VoiceClient::tick needs more than...".
 #
+# wmem_default = 8 MB (antes 2 MB): el buffer de ENVIO por defecto se llenaba en
+# las oleadas de reconexion (cientos de clientes reconectando a la vez tras un
+# corte) y sendto() devolvia EAGAIN en el socket UDP de voz. 8 MB las absorbe.
+#
 # Idempotente. El cap por-socket aplica a sockets NUEVOS, asi que el efecto pleno
 # llega cuando TeaSpeak re-crea sus sockets (reinicio del servicio).
 # =============================================================================
@@ -21,7 +25,7 @@ cat > "$CONF" <<'EOF'
 net.core.rmem_max = 33554432
 net.core.rmem_default = 4194304
 net.core.wmem_max = 16777216
-net.core.wmem_default = 2097152
+net.core.wmem_default = 8388608
 net.core.netdev_max_backlog = 20000
 EOF
 

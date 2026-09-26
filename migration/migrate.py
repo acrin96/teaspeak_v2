@@ -21,7 +21,10 @@ TABLES = ["servers","channels","groups","clients","clients_server","assignedGrou
           "conversations","conversation_blocks","general"]
 
 # columnas IDENTITY en PostgreSQL cuya secuencia hay que reajustar tras insertar
-IDENTITY = {"clients":"client_database_id", "general":"id", "groups":"groupid"}
+# (letters.letterid es IDENTITY desde el fix de mensajes offline; en esquemas antiguos
+#  donde aun no lo es, pg_get_serial_sequence devuelve NULL y el setval no hace nada)
+IDENTITY = {"clients":"client_database_id", "general":"id", "groups":"groupid",
+            "letters":"letterid"}
 
 sq = sqlite3.connect(sqlite_path)
 pg = psycopg2.connect("dbname=%s" % dbname)   # socket local, peer como usuario postgres

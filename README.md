@@ -14,7 +14,8 @@ curl -fsSL https://raw.githubusercontent.com/acrin96/teaspeak_v2/main/install.sh
 
 Ese único comando lo hace **todo**: descarga el binario, instala dependencias, crea el rol y las dos bases
 PostgreSQL (principal + logs), despliega en `/opt/teaspeak`, genera la configuración, instala los scripts
-(`firewall.sh`, `backup.sh`, `logs_retention.sh`), programa el backup diario y la retención de logs, registra
+(`firewall.sh`, `backup.sh`, `logs_retention.sh`, `sysctl_tuning.sh`, `sysstat_setup.sh`), programa el backup
+diario y la retención de logs, aplica el tuning de red y activa `sysstat` (sar cada minuto), registra
 el servicio `systemd`, arranca el servidor **e imprime al final la contraseña de `serveradmin` y la clave de
 privilegio del grupo Server Admin**. Es **idempotente**: re-ejecútalo para actualizar sin perder config ni datos.
 
@@ -40,7 +41,8 @@ sudo -u postgres psql -d teaspeak -c "SELECT token,description FROM tokens;"    
 |---|---|
 | `install.sh` | Instalador / actualizador. |
 | `scripts/firewall.sh` | Firewall iptables: SSH, ServerQuery y PostgreSQL solo para tu whitelist; voz y ficheros públicos con rate-limit. |
-| `scripts/sysctl_tuning.sh` | Tuning de red: sube los buffers UDP de recepción y el backlog del kernel para evitar "receive buffer errors" (Packet Resend Failed) en la voz bajo carga. |
+| `scripts/sysctl_tuning.sh` | Tuning de red: sube los buffers UDP (recepción `rmem_default` 4 MB / `rmem_max` 32 MB; envío `wmem_default` 8 MB / `wmem_max` 16 MB) y el backlog del kernel para evitar "receive buffer errors" (Packet Resend Failed) bajo carga y los `EAGAIN` de envío UDP en las oleadas de reconexión. |
+| `scripts/sysstat_setup.sh` | Activa `sysstat` (sar) para forense de incidentes: muestreo **cada minuto** (override del `sysstat-collect.timer`) y **28 días** de histórico en `/var/log/sysstat`. Instala el paquete si falta. Idempotente; `install.sh` lo aplica (omitir con `APPLY_SYSSTAT=0`). Ej.: `sar -n UDP,EDEV -s 21:00:00 -e 21:30:00`. |
 | `scripts/backup.sh` | Backup con `pg_dump` de la base principal + ficheros de runtime, con retención. Ideal para cron diario. |
 | `scripts/logs_retention.sh` | Tope FIFO de tamaño para la base de logs (lo instala `install.sh` en cron horario). |
 

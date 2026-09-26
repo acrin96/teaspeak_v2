@@ -116,7 +116,7 @@ cp -a "$SRC/resources/." "$INSTALL_DIR/resources/"
 # se toman del paquete si estan, o se descargan del repo publico para tener la version actual
 SCRIPTS_BASE="${SCRIPTS_BASE:-https://raw.githubusercontent.com/acrin96/teaspeak_v2/main/scripts}"
 # Repo primero (version actual con correcciones); el tarball solo como respaldo sin internet.
-for s in firewall.sh backup.sh logs_retention.sh sysctl_tuning.sh; do
+for s in firewall.sh backup.sh logs_retention.sh sysctl_tuning.sh sysstat_setup.sh; do
     if curl -fsSL "$SCRIPTS_BASE/$s" -o "$INSTALL_DIR/scripts/$s" 2>/dev/null && [ -s "$INSTALL_DIR/scripts/$s" ]; then
         chmod +x "$INSTALL_DIR/scripts/$s"
     elif [ -f "$SRC/scripts/$s" ]; then
@@ -220,6 +220,12 @@ if [ -f "$INSTALL_DIR/scripts/sysctl_tuning.sh" ]; then
     bash "$INSTALL_DIR/scripts/sysctl_tuning.sh" || echo -e "\e[1;33m[install] AVISO:\e[0m no pude aplicar el sysctl tuning; hazlo a mano."
 fi
 
+# --- sysstat (sar) para forense de incidentes: muestreo cada minuto, 28 dias ---
+if [ "${APPLY_SYSSTAT:-1}" = 1 ] && [ -f "$INSTALL_DIR/scripts/sysstat_setup.sh" ]; then
+    say "Activando sysstat (sar cada minuto, 28 dias de historico)..."
+    bash "$INSTALL_DIR/scripts/sysstat_setup.sh" || echo -e "\e[1;33m[install] AVISO:\e[0m no pude activar sysstat; lanzalo a mano: bash $INSTALL_DIR/scripts/sysstat_setup.sh"
+fi
+
 # --- firewall (activado por defecto; usa la whitelist de scripts/firewall.sh) ---
 # Se aplica ANTES de arrancar TeaSpeak: firewall.sh reinicia PostgreSQL para activar el
 # acceso remoto (listen_addresses) sin cortarle la conexion al servidor de voz.
@@ -283,6 +289,7 @@ if [ "$UPGRADE" = 0 ]; then
     echo "  Scripts en $INSTALL_DIR/scripts/ :"
     echo "     backup.sh        -> backup diario ya programado (cron 04:30)"
     echo "     logs_retention.sh-> tope de logs ya programado (cron horario)"
+    echo "     sysstat_setup.sh -> sar cada minuto, 28 dias (forense: sar -n UDP,EDEV)"
     if [ "${APPLY_FIREWALL:-1}" = 1 ]; then
         echo "     firewall.sh      -> aplicado (SSH/Query/PostgreSQL solo tu whitelist)."
         echo "                         PostgreSQL accesible desde tu pgAdmin: host=<IP publica> puerto=5432"
