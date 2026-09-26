@@ -4,7 +4,10 @@
 #
 #   - SSH (22), ServerQuery (10101) y PostgreSQL (5432): CERRADOS al publico,
 #     abiertos solo a las IPs de whitelist.
-#   - Voz (UDP) y transferencia de ficheros (TCP): publicos con rate-limit.
+#   - Voz (UDP): publica y fuera de conntrack (VOICE_NOTRACK=1, por defecto).
+#   - Transferencia de ficheros (TCP): publica con limite de conexiones por IP.
+#   - WireGuard: red privada 10.66.0.0/24 con Vps-Central y Vps-WEB (WG_PEERS).
+#   - Paneles: TsBot Control (8443) solo admin; pagos (443) solo desde Cloudflare.
 #   - Si WHITELIST_DB no esta vacio, ademas de abrir 5432 a esas IPs configura
 #     PostgreSQL para escuchar de forma remota SOLO desde ellas (listen_addresses
 #     + pg_hba). Deja WHITELIST_DB vacio para mantener la BD solo en localhost.
@@ -49,6 +52,21 @@ VOICE_NEW_BURST="${VOICE_NEW_BURST:-30}"
 # 1 = voz FUERA de conntrack (recomendado a escala; sin rate-limit per-IP).
 # 0 = rate-limit legacy per-srcip (bloquea clientes que comparten IP/CGNAT).
 VOICE_NOTRACK="${VOICE_NOTRACK:-1}"
+
+# Red privada WireGuard (10.66.0.0/24) entre nuestras VPS. Se acepta todo lo que entra por wg0
+# y el puerto UDP de WireGuard solo desde estas IPs publicas (Vps-Central y Vps-WEB).
+WG_PORT="${WG_PORT:-51820}"
+WG_PEERS="${WG_PEERS:-23.26.121.186 141.11.104.194}"
+
+# Paneles web alojados en esta maquina: TsBot Control (8443, solo admin) y pagina de pagos
+# (443, solo desde Cloudflare). Vacio = no se abren.
+WHITELIST_DASH="${WHITELIST_DASH:-172.216.237.49}"
+TCP_DASH="${TCP_DASH:-8443}"
+TCP_PAY="${TCP_PAY:-443}"
+CLOUDFLARE_IPS="${CLOUDFLARE_IPS:-173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22}"
+
+# 1 = no guardar las reglas (pruebas en un network namespace).
+NO_PERSIST="${NO_PERSIST:-0}"
 # ======================================================================
 
 echo -e "${CYAN}${BOLD}========================================================"
@@ -66,6 +84,17 @@ iptables -A INPUT -i lo -j ACCEPT
 iptables -A INPUT -m conntrack --ctstate INVALID -j DROP
 iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 log_ok "Establecidas/relacionadas permitidas; invalidas descartadas"
+
+step "WireGuard (red privada entre nuestras VPS)"
+if [[ -n "${WG_PEERS// }" ]]; then
+    iptables -A INPUT -i wg0 -m comment --comment "red privada WireGuard (10.66.0.0/24)" -j ACCEPT
+    for ip in $WG_PEERS; do
+        iptables -A INPUT -s "$ip" -p udp --dport "$WG_PORT" -m comment --comment "WireGuard peer" -j ACCEPT
+        echo -e "  - WireGuard permitido a ${YELLOW}$ip${NC}"
+    done
+else
+    log_info "WG_PEERS vacio: sin WireGuard"
+fi
 
 step "Blacklist"
 for ip in $BLACKLIST_IPS; do
@@ -101,7 +130,9 @@ else
     # --- habilitar escucha remota de PostgreSQL SOLO para esas IPs ---
     PG_CONF="$(find /etc/postgresql -name postgresql.conf 2>/dev/null | head -1)"
     PG_HBA="$(find /etc/postgresql -name pg_hba.conf 2>/dev/null | head -1)"
-    if [[ -n "$PG_CONF" && -n "$PG_HBA" ]]; then
+    if [[ "$NO_PERSIST" = 1 ]]; then
+        log_info "NO_PERSIST=1: no se toca la configuracion de PostgreSQL"
+    elif [[ -n "$PG_CONF" && -n "$PG_HBA" ]]; then
         PG_NEEDS_RESTART=0
         if ! grep -qE "^[[:space:]]*listen_addresses[[:space:]]*=[[:space:]]*'\\*'" "$PG_CONF"; then
             sed -i "s/^[[:space:]]*#\?[[:space:]]*listen_addresses[[:space:]]*=.*/listen_addresses = '*'/" "$PG_CONF"
@@ -127,12 +158,20 @@ else
     fi
 fi
 
-step "Voz UDP ($UDP_PORTS) - publico con rate-limit de conexiones nuevas"
-iptables -A INPUT -p udp --dport "$UDP_PORTS" -m conntrack --ctstate NEW \
-    -m hashlimit --hashlimit-name ts_voice --hashlimit-mode srcip \
-    --hashlimit-above "${VOICE_NEW_PER_SEC}/sec" --hashlimit-burst "${VOICE_NEW_BURST}" -j DROP
-iptables -A INPUT -p udp --dport "$UDP_PORTS" -j ACCEPT
-log_ok "Voz abierta; max ${VOICE_NEW_PER_SEC} conexiones nuevas/seg por IP (rafaga ${VOICE_NEW_BURST})"
+if [[ "$VOICE_NOTRACK" = 1 ]]; then
+    step "Voz UDP ($UDP_PORTS) - publica y FUERA de conntrack (notrack)"
+    iptables -t raw -A PREROUTING -p udp --dport "$UDP_PORTS" -j CT --notrack
+    iptables -t raw -A OUTPUT -p udp --sport "$UDP_PORTS" -j CT --notrack
+    iptables -A INPUT -p udp --dport "$UDP_PORTS" -j ACCEPT
+    log_ok "Voz abierta sin conntrack (sin tabla de estados que se llene ni limite por IP/CGNAT)"
+else
+    step "Voz UDP ($UDP_PORTS) - publico con rate-limit de conexiones nuevas"
+    iptables -A INPUT -p udp --dport "$UDP_PORTS" -m conntrack --ctstate NEW \
+        -m hashlimit --hashlimit-name ts_voice --hashlimit-mode srcip \
+        --hashlimit-above "${VOICE_NEW_PER_SEC}/sec" --hashlimit-burst "${VOICE_NEW_BURST}" -j DROP
+    iptables -A INPUT -p udp --dport "$UDP_PORTS" -j ACCEPT
+    log_ok "Voz abierta; max ${VOICE_NEW_PER_SEC} conexiones nuevas/seg por IP (rafaga ${VOICE_NEW_BURST})"
+fi
 
 step "Transferencia de ficheros ($TCP_FILES) - publico con limite de conexiones"
 iptables -A INPUT -p tcp --dport "$TCP_FILES" -m connlimit --connlimit-above "${FILES_CONNLIMIT}" -j REJECT
@@ -144,18 +183,33 @@ iptables -A INPUT -p icmp --icmp-type echo-request -m limit --limit 1/s --limit-
 iptables -A INPUT -p icmp -j DROP
 log_ok "Ping limitado a 1/seg (rafaga 5)"
 
-step "Persistiendo reglas"
-mkdir -p /etc/iptables
-if command -v netfilter-persistent >/dev/null 2>&1; then
-    netfilter-persistent save >/dev/null 2>&1
+step "Paneles web (TsBot Control $TCP_DASH solo admin; pagos $TCP_PAY solo Cloudflare)"
+for ip in $WHITELIST_DASH; do
+    iptables -A INPUT -s "$ip" -p tcp --dport "$TCP_DASH" -j ACCEPT
+    echo -e "  - Dashboard permitido a ${YELLOW}$ip${NC}"
+done
+for net in $CLOUDFLARE_IPS; do
+    iptables -A INPUT -s "$net" -p tcp --dport "$TCP_PAY" -j ACCEPT
+done
+[[ -n "${CLOUDFLARE_IPS// }" ]] && log_ok "Pagos ($TCP_PAY) solo desde rangos de Cloudflare"
+
+if [[ "$NO_PERSIST" = 1 ]]; then
+    log_info "NO_PERSIST=1: reglas NO guardadas"
 else
-    iptables-save > /etc/iptables/rules.v4
+    step "Persistiendo reglas"
+    mkdir -p /etc/iptables
+    if command -v netfilter-persistent >/dev/null 2>&1; then
+        netfilter-persistent save >/dev/null 2>&1
+    else
+        iptables-save > /etc/iptables/rules.v4
+    fi
+    log_ok "Reglas guardadas (se restauran al arrancar)"
 fi
-log_ok "Reglas guardadas (se restauran al arrancar)"
 
 echo ""
 echo -e "${GREEN}${BOLD}Firewall aplicado.${NC}"
 log_info "SSH ($SSH_PORT), Query ($TCP_QUERY) y PostgreSQL ($TCP_DB): solo whitelist."
-log_info "Voz ($UDP_PORTS) y Ficheros ($TCP_FILES): publicos con rate-limit."
+log_info "Voz ($UDP_PORTS): publica$([[ "$VOICE_NOTRACK" = 1 ]] && echo ' sin conntrack' || echo ' con rate-limit'); Ficheros ($TCP_FILES): publicos con limite de conexiones."
+log_info "WireGuard ($WG_PORT/udp): solo ${WG_PEERS:-nadie}; todo lo que entra por wg0 se acepta."
 echo -e "${YELLOW}Recuerda: UDP_PORTS ($UDP_PORTS) debe cubrir los puertos de tus servidores virtuales.${NC}"
 echo -e "${YELLOW}Aviso: si te conectas por SSH desde una IP fuera de WHITELIST_SSH, te quedaras fuera.${NC}"
