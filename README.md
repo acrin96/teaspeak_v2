@@ -40,7 +40,7 @@ sudo -u postgres psql -d teaspeak -c "SELECT token,description FROM tokens;"    
 | Script | Para qué |
 |---|---|
 | `install.sh` | Instalador / actualizador. |
-| `scripts/firewall.sh` | Firewall iptables: SSH, ServerQuery y PostgreSQL solo para tu whitelist; voz y ficheros públicos con rate-limit. |
+| `scripts/firewall.sh` | Firewall iptables: SSH, ServerQuery y PostgreSQL solo para tu whitelist; voz pública fuera de conntrack (`VOICE_NOTRACK=1`); ficheros públicos con límite por IP; WireGuard (red privada 10.66.0.0/24, `WG_PEERS`); paneles 8443 (admin) y 443 (Cloudflare). `NO_PERSIST=1` para probarlo en un network namespace. |
 | `scripts/sysctl_tuning.sh` | Tuning de red: sube los buffers UDP (recepción `rmem_default` 4 MB / `rmem_max` 32 MB; envío `wmem_default` 8 MB / `wmem_max` 16 MB) y el backlog del kernel para evitar "receive buffer errors" (Packet Resend Failed) bajo carga y los `EAGAIN` de envío UDP en las oleadas de reconexión. |
 | `scripts/sysstat_setup.sh` | Activa `sysstat` (sar) para forense de incidentes: muestreo **cada minuto** (override del `sysstat-collect.timer`) y **28 días** de histórico en `/var/log/sysstat`. Instala el paquete si falta. Idempotente; `install.sh` lo aplica (omitir con `APPLY_SYSSTAT=0`). Ej.: `sar -n UDP,EDEV -s 21:00:00 -e 21:30:00`. |
 | `scripts/backup.sh` | Backup con `pg_dump` de la base principal + ficheros de runtime, con retención. Ideal para cron diario. |
@@ -49,7 +49,7 @@ sudo -u postgres psql -d teaspeak -c "SELECT token,description FROM tokens;"    
 ## Firewall y acceso a PostgreSQL (pgAdmin)
 
 El instalador **aplica el firewall por defecto** (`scripts/firewall.sh`, whitelist en su cabecera): SSH,
-ServerQuery y PostgreSQL quedan abiertos solo a tus IPs; voz y ficheros públicos con *rate-limit*. Si
+ServerQuery y PostgreSQL quedan abiertos solo a tus IPs; voz pública sin conntrack y ficheros públicos con límite de conexiones por IP. Si
 `WHITELIST_DB` tiene tu IP, además habilita el acceso remoto a PostgreSQL y podrás conectarte con **pgAdmin**
 (host = IP pública, puerto 5432, base `teaspeak`, usuario `teaspeak`, contraseña de `config.yml`, SSL `prefer`).
 
