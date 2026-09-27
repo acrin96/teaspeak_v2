@@ -47,6 +47,7 @@ sudo -u postgres psql -d teaspeak -c "SELECT token,description FROM tokens;"    
 | `scripts/logs_retention.sh` | Tope FIFO de tamaño para la base de logs (lo instala `install.sh` en cron horario). |
 | `scripts/ts_maint.py` | Mantenimiento one-shot (cron `/etc/cron.d/ts-maint-once`): sube los pools de hilos de `config.yml`, reinicia, verifica salud y hace rollback automático; avisa por poke + WhatsApp al admin. `--check` = ensayo sin tocar producción. |
 | `scripts/ts_maint_bin.py` | Mantenimiento one-shot de **cambio de binario** (cron `/etc/cron.d/ts-maint-bin-once`, ventana 10:02): valida el md5 del build nuevo, backup del binario + `config.yml` + `pg_dump`, cambia el binario, health-check y rollback automático. Reutiliza las funciones de `ts_maint.py`. `--check` = ensayo. |
+| `scripts/ts_query.py` | Cliente ServerQuery mínimo (solo stdlib) que usan `ts_maint*.py`: los scripts de mantenimiento corren con el `python3` del sistema (`/usr/bin/python3`) y **no dependen** de `/opt/tsbot-dash` ni de su venv. Si no pueden contar los vservers online **abortan sin tocar nada** (antes asumían 14). |
 
 ## Firewall y acceso a PostgreSQL (pgAdmin)
 

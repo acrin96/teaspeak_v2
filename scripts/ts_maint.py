@@ -1,4 +1,4 @@
-#!/opt/tsbot-dash/venv/bin/python
+#!/usr/bin/python3
 """Mantenimiento auto-ejecutable de TeaSpeak: sube los pools de hilos en config.yml,
 reinicia, verifica salud y HACE ROLLBACK AUTOMATICO si algo va mal, avisando al admin
 por WhatsApp en cada paso. One-shot (se auto-desprograma). Solo toca hilos (cambio
@@ -13,9 +13,11 @@ from __future__ import annotations
 import asyncio, os, subprocess, sys, time, urllib.request, urllib.parse, shutil
 from datetime import datetime
 
-sys.path.insert(0, "/opt/tsbot-dash")
-import ts_ops
-from ts_ops import _parse
+# F12: cliente ServerQuery propio (ts_query.py, junto a este script, solo stdlib). Antes se importaba
+# ts_ops de /opt/tsbot-dash y se usaba su venv: borrar el dashboard rompia el mantenimiento.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import ts_query as ts_ops
+from ts_query import _parse
 
 CHECK = "--check" in sys.argv
 CRON_FILE = "/etc/cron.d/ts-maint-once"
@@ -188,6 +190,11 @@ async def main():
         return 2
 
     expected, _ = await count_clients_expected()
+    if expected is None:
+        msg = ("no se pudo contar los vservers online (ServerQuery sin respuesta o 0 online): sin ese "
+               "numero el health-check no sabe que esperar. ABORTADO sin tocar nada.")
+        log(msg); wa_send(f"🚨 [Mantenimiento] {msg}")
+        return 2
     log(f"vservers online esperados: {expected}")
 
     if CHECK:
@@ -210,16 +217,20 @@ async def main():
     log(f"pokeados: {poked}")
     await asyncio.sleep(WARN_SECONDS)
 
+    touched = False  # solo se hace rollback (y reinicio) si ya se cambio config.yml / se reinicio TS
     try:
         wa_send(f"🔧 [1/5] Iniciando. Backup de config.yml + dump de la BD teaspeak (poked={poked})...")
         shutil.copy2(CONFIG, BAK)
         os.makedirs(BACKUP_DIR, exist_ok=True)
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         dump = f"{BACKUP_DIR}/teaspeak_premaint_{ts}.sql.gz"
-        run(f"sudo -u postgres pg_dump --no-owner --no-privileges teaspeak | gzip > {dump}")
+        ok_dump, err = pg_dump_to(dump)
+        if not ok_dump:
+            raise RuntimeError(f"pg_dump fallo antes de tocar nada: {err}")
         log(f"backup config -> {BAK} ; dump -> {dump}")
 
         wa_send("🔄 [2/5] Aplicando nuevos hilos y reiniciando TeaSpeak...")
+        touched = True
         open(CONFIG, "w", encoding="utf-8").write(new)
         run(f"systemctl restart {TS_SERVICE}")
         log("teaspeak reiniciado; verificando salud...")
@@ -243,6 +254,11 @@ async def main():
         reason = str(ex)[:200]
         log(f"!!! FALLO: {reason} -> ROLLBACK")
         try:
+            if not touched:
+                wa_send(f"❌ [Mantenimiento] Abortado ANTES de tocar TeaSpeak: {reason}. "
+                        "No se reinicio nada; TeaSpeak y bot siguen igual.")
+                log("=== ABORTADO SIN TOCAR NADA ===")
+                return 1
             shutil.copy2(BAK, CONFIG)
             run(f"systemctl restart {TS_SERVICE}")
             ok, info = await ts_healthy(expected)
@@ -262,8 +278,20 @@ async def main():
             return 3
 
 async def count_clients_expected():
+    """(vservers online esperados, clientes). Si el conteo falla devuelve (None, c): el llamador
+    ABORTA antes de tocar nada. Antes se asumian 14 vservers, lo que con otro numero real provocaba
+    un rollback falso (menos de 14) o un health-check que no detectaba vservers caidos (mas de 14)."""
     c, vs = await count_clients()
-    return (vs if vs > 0 else 14), c
+    return (vs if vs > 0 else None), c
+
+
+def pg_dump_to(path):
+    """pg_dump | gzip con pipefail en bash (run() usa /bin/sh = dash, sin pipefail) y comprobacion
+    de tamano: un dump fallido ya no pasa desapercibido."""
+    cmd = f"set -o pipefail; sudo -u postgres pg_dump --no-owner --no-privileges teaspeak | gzip > {path}"
+    r = subprocess.run(["bash", "-c", cmd], capture_output=True, text=True, cwd="/tmp")
+    ok = r.returncode == 0 and os.path.exists(path) and os.path.getsize(path) > 1024
+    return ok, (r.stderr or "")[:160]
 
 if __name__ == "__main__":
     sys.exit(asyncio.get_event_loop().run_until_complete(main()))

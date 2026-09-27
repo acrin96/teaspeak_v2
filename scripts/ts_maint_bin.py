@@ -1,4 +1,4 @@
-#!/opt/tsbot-dash/venv/bin/python
+#!/usr/bin/python3
 """Mantenimiento auto-ejecutable de TeaSpeak: CAMBIO DE BINARIO.
 
 Despliega /root/build-out/TeaSpeakServer.new (fix Postgres: upsert en properties -> sin
@@ -15,8 +15,8 @@ from __future__ import annotations
 import asyncio, os, subprocess, sys, time, shutil, hashlib
 from datetime import datetime
 
-sys.path.insert(0, "/opt/teaspeak/scripts")
-import ts_maint as base  # reutiliza wa_send, ts_healthy, count_clients, warn_poke, psql
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import ts_maint as base  # reutiliza wa_send, ts_healthy, count_clients, warn_poke, psql (y ts_query)
 
 CHECK = "--check" in sys.argv
 base.CHECK = CHECK
@@ -73,6 +73,10 @@ async def main():
         msg = f"al binario nuevo le faltan librerias ({r.stdout.strip()}). ABORTADO sin tocar nada."
         log(msg); wa_send(f"🚨 [Mantenimiento] {msg}"); return 2
     expected, clients = await base.count_clients_expected()
+    if expected is None:
+        msg = ("no se pudo contar los vservers online (ServerQuery sin respuesta o 0 online). "
+               "ABORTADO sin tocar nada.")
+        log(msg); wa_send(f"🚨 [Mantenimiento] {msg}"); return 2
     log(f"vservers esperados={expected} clientes={clients} letterid_identity={letterid_identity()}")
 
     if CHECK:
