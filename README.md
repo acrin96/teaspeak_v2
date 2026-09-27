@@ -45,6 +45,8 @@ sudo -u postgres psql -d teaspeak -c "SELECT token,description FROM tokens;"    
 | `scripts/sysstat_setup.sh` | Activa `sysstat` (sar) para forense de incidentes: muestreo **cada minuto** (override del `sysstat-collect.timer`) y **28 días** de histórico en `/var/log/sysstat`. Instala el paquete si falta. Idempotente; `install.sh` lo aplica (omitir con `APPLY_SYSSTAT=0`). Ej.: `sar -n UDP,EDEV -s 21:00:00 -e 21:30:00`. |
 | `scripts/backup.sh` | Backup con `pg_dump` de la base principal + ficheros de runtime, con retención. Ideal para cron diario. |
 | `scripts/logs_retention.sh` | Tope FIFO de tamaño para la base de logs (lo instala `install.sh` en cron horario). |
+| `scripts/ts_maint.py` | Mantenimiento one-shot (cron `/etc/cron.d/ts-maint-once`): sube los pools de hilos de `config.yml`, reinicia, verifica salud y hace rollback automático; avisa por poke + WhatsApp al admin. `--check` = ensayo sin tocar producción. |
+| `scripts/ts_maint_bin.py` | Mantenimiento one-shot de **cambio de binario** (cron `/etc/cron.d/ts-maint-bin-once`, ventana 10:02): valida el md5 del build nuevo, backup del binario + `config.yml` + `pg_dump`, cambia el binario, health-check y rollback automático. Reutiliza las funciones de `ts_maint.py`. `--check` = ensayo. |
 
 ## Firewall y acceso a PostgreSQL (pgAdmin)
 
