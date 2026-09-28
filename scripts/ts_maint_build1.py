@@ -305,10 +305,10 @@ async def main():
     # 2) base B1 en vivo (Build 1 se construyo sobre e02aefb)
     live = md5(LIVE)
     ident = letterid_identity()
-    if live != EXPECTED_LIVE:
-        pending_b1.append(f"el binario vivo es {live[:8]}, se espera el de B1 {EXPECTED_LIVE[:8]}")
-    if ident != "YES":
-        pending_b1.append(f"letters.letterid identity={ident} (B1 la deja en YES)")
+    # 28-sep: el dueño aprobó UN SOLO CORTE -> se acepta también el binario vivo actual (pre-B1).
+    # Build 1 incluye los fixes de B1; letters.letterid pasa a identity en su propio arranque.
+    if live not in (EXPECTED_LIVE, "87dcc199ee2b3537a3fb426331af77f3"):
+        pending_b1.append(f"el binario vivo es {live[:8]}, no es ni el actual (87dcc199) ni el de B1 {EXPECTED_LIVE[:8]}")
 
     # 3) config: edicion + parseo en seco (con una contrasena candidata que se descarta en --check)
     with open(CONFIG, encoding="utf-8") as f:
@@ -384,8 +384,7 @@ async def main():
     wa_send("🛠️ [Aviso] Mantenimiento de TeaSpeak en ~5 min. Aviso por poke a los conectados. "
             "Build 1: correcciones de integridad de datos y seguridad + rotacion de la contrasena de la BD "
             "+ cliente TeaSpeak desactivado. Corte de voz ~1-2 min; todos reconectan solos.")
-    poked = await base.warn_poke("🛠️ Maintenance in ~5 min / Mantenimiento en ~5 min / Manutenção em ~5 min: "
-                                 "voice drop ~1-2 min, you will reconnect automatically.")
+    poked = await base.warn_poke("[b][color=red]Maintenance in 5 min: ~2 min downtime, you will reconnect automatically.[/color][/b]")
     log(f"pokeados: {poked}")
     await asyncio.sleep(WARN_SECONDS)
 
