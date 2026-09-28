@@ -2,7 +2,7 @@
 """Mantenimiento de TeaSpeak: BUILD 1 (integridad de datos + seguridad) + B15 + clients.teaspeak: 0.
 
 En UN solo reinicio:
-  1. Binario Build 1 (/root/build-out/build1/TeaSpeakServer.build1, md5 2ea06c90...).
+  1. Binario Build 1 (/root/build-out/build1/TeaSpeakServer.build1, md5 2be7a0e2..., Build 1 + T20).
   2. B15: rota la contrasena del rol PostgreSQL `teaspeak` (ALTER ROLE justo antes del arranque) y la
      actualiza en /opt/teaspeak/config.yml (general.database.url y log.instance_logs_url).
      La contrasena se genera aqui (secrets, 32 alfanumericos) y NUNCA se imprime; a la BD se le pasa ya
@@ -47,7 +47,7 @@ CHECK = "--check" in sys.argv
 base.CHECK = CHECK
 LIVE = "/opt/teaspeak/TeaSpeakServer"
 NEW = "/root/build-out/build1/TeaSpeakServer.build1"
-NEW_MD5 = "2ea06c90c9a4f1d4ed08efc59e786edd"
+NEW_MD5 = "2be7a0e252a17efe0b1d2753323932ac"   # Build 1 + T20 (28-sep 04:18); sin T20 = 2ea06c90c9a4f1d4ed08efc59e786edd (TeaSpeakServer.build1.prev)
 EXPECTED_LIVE = "50d24fd12124fab9fb576b5c964f2420"   # binario de B1 (e02aefb) que debe estar ya en vivo
 CONFIG = "/opt/teaspeak/config.yml"
 BACKUP_DIR = "/opt/teaspeak/backups"
