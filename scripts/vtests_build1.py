@@ -119,6 +119,16 @@ def recs(lines: list[str]) -> list[dict]:
     return [parse(x) for x in lines[0].split("|")] if lines and lines[0] else []
 
 
+def ftrec(lines: list[str]) -> dict:
+    """Respuesta de ftinitupload/ftinitdownload: TeaSpeak intercala antes notifyfiletransfer* de transferencias
+    anteriores, asi que se toma la primera linea que trae ftkey (no la linea 0)."""
+    for ln in lines:
+        for d in (parse(x) for x in ln.split("|")):
+            if "ftkey" in d:
+                return d
+    return {}
+
+
 class Q:
     def __init__(self, r, w, tag):
         self.r, self.w, self.tag = r, w, tag
@@ -298,14 +308,17 @@ async def v2(c, sid, tpl, since):
         await q.must(f"use {tpl}")                      # solo lectura en el template (exportacion)
         b, e = await q.send("clientdblist start=0 duration=1 -count")
         total = int(recs(b)[0].get("count", 0)) if e.get("id") == "0" and b else 0
-        snap = (await q.must("serversnapshotcreate", 180))[0]
+        # sin version=, TeaSpeak devuelve el snapshot comprimido (zstd+base64): version=2 lo da en claro
+        snap = "\n".join(await q.must("serversnapshotcreate version=2", 180))
         m = re.search(r"begin_clients(.*?)end_clients", snap, re.S)
         n = len(re.findall(r"client_id=", m.group(1))) if m else 0
         st = "PASS" if (n > 0 if total > 0 else True) else "FAIL"
         res("V2 snapshot exporta clientes", st, f"template sid={tpl}: clientdblist={total} client_id_en_snapshot={n}")
         await q.must(f"use {sid}")
-        bb = await q.must("banadd ip=192.0.2.123 banreason=zz-e2e time=600")
-        banid = recs(bb)[0].get("banid")
+        await q.must("banadd ip=192.0.2.123 banreason=zz-e2e time=600")
+        # banadd de TeaSpeak solo responde ok (sin banid) y banlist hace JOIN con clients_server del invocador
+        # (serveradmin no tiene fila en un vserver nuevo): el banid se lee de la BD
+        banid = psql(f"SELECT max(banid) FROM bannedclients WHERE serverid={sid} AND ip='192.0.2.123'", "teaspeak")
         b, e = await q.send(f"bantriggerlist banid={banid}")
         await q.send(f"bandel banid={banid}")
         lim = pg_errs(since, "LIMIT must not be negative")
@@ -460,12 +473,12 @@ async def v8(c, sid, ch):
             data = os.urandom(2048 + i)
             b = await q.must(f"ftinitupload clientftfid={100 + i} name=\\/zz_e2e_{i}.bin cid={ch['files']} cpw= "
                              f"size={len(data)} overwrite=1 resume=0")
-            u = recs(b)[0]
+            u = ftrec(b)
             keys.append(u["ftkey"])
             await ft_io(u["port"], u["ftkey"], data)
             await asyncio.sleep(0.3)
             b = await q.must(f"ftinitdownload clientftfid={200 + i} name=\\/zz_e2e_{i}.bin cid={ch['files']} cpw= seekpos=0")
-            d = recs(b)[0]
+            d = ftrec(b)
             got = await ft_io(d["port"], d["ftkey"], None, int(d["size"]))
             keys.append(d["ftkey"])
             if got != data:
@@ -479,11 +492,11 @@ async def v8(c, sid, ch):
                             "1f15c4890000000d49444154789c6360000002000154a24f5d0000000049454e44ae426082")
         crc = int.from_bytes(hashlib.md5(png).digest()[:4], "big") & 0x7FFFFFFF
         b = await q.must(f"ftinitupload clientftfid=300 name=\\/icon_{crc} cid=0 cpw= size={len(png)} overwrite=1 resume=0")
-        u = recs(b)[0]
+        u = ftrec(b)
         await ft_io(u["port"], u["ftkey"], png)
         await asyncio.sleep(0.3)
         b = await q.must(f"ftinitdownload clientftfid=301 name=\\/icon_{crc} cid=0 cpw= seekpos=0")
-        d = recs(b)[0]
+        d = ftrec(b)
         got = await ft_io(d["port"], d["ftkey"], None, int(d["size"]))
         res("V8 icono subida/bajada", "PASS" if got == png else "FAIL", f"icon_{crc} {len(got)} bytes")
     except Exception as ex:  # noqa: BLE001
