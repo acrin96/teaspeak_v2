@@ -98,8 +98,7 @@ async def main():
 
     wa_send("🛠️ [Aviso] Mantenimiento de TeaSpeak en ~5 min (10:02). Aviso por poke a los conectados. "
             "Nuevo binario con correcciones de base de datos. Corte de voz ~1-2 min; todos reconectan solos.")
-    poked = await base.warn_poke("🛠️ Maintenance in ~5 min / Mantenimiento en ~5 min / Manutenção em ~5 min: "
-                                 "voice drop ~1-2 min, you will reconnect automatically.")
+    poked = await base.warn_poke("[b][color=red]Maintenance in 5 min: ~2 min downtime, you will reconnect automatically.[/color][/b]")
     log(f"pokeados: {poked}")
     await asyncio.sleep(WARN_SECONDS)
 

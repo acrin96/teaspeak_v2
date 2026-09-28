@@ -143,6 +143,10 @@ async def warn_poke(msg):
         for sid in sids:
             try:
                 await ts.use(sid)
+                try:
+                    await ts.send("clientupdate client_nickname=" + ts_ops._esc("TsBot Alert"))
+                except Exception:
+                    pass
                 spy = set()
                 bg, _ = await ts.send("servergrouplist")
                 ssg = next((_parse(r)["sgid"] for r in bg[0].split("|")
