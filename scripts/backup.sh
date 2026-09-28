@@ -14,6 +14,9 @@
 # Pensado para cron (diario).
 # =============================================================================
 set -uo pipefail
+# Dumps y tarballs solo para root (600): llevan datos de clientes y config.yml con la contrasena de la BD.
+# (el directorio de backups ya es 700; umask 077 cubre tambien backup.log y los ficheros nuevos)
+umask 077
 
 INSTALL_DIR="${TEASPEAK_DIR:-/opt/teaspeak}"
 BACKUP_DIR="${TEASPEAK_BACKUP_DIR:-${INSTALL_DIR}/backups}"

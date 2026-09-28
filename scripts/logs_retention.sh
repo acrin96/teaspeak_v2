@@ -12,12 +12,12 @@
 # Pensado para ejecutarse por cron (p.ej. cada hora).
 #
 # Uso:  logs_retention.sh [DB] [CAP_GIB]
-#   DB      nombre de la base de logs   (default: teaspeak14_logs)
+#   DB      nombre de la base de logs   (default: teaspeak_logs; la base de logs que crea install.sh)
 #   CAP_GIB tope en GiB                 (default: 25)
 #
 set -u
 
-DB="${1:-teaspeak14_logs}"
+DB="${1:-teaspeak_logs}"
 CAP_GIB="${2:-25}"
 CAP_BYTES=$(( CAP_GIB * 1024 * 1024 * 1024 ))
 # override en bytes (solo para pruebas): TEASPEAK_LOGS_CAP_BYTES
