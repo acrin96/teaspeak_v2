@@ -7,7 +7,8 @@
 #   - Voz (UDP): publica y fuera de conntrack (VOICE_NOTRACK=1, por defecto).
 #   - Transferencia de ficheros (TCP): publica con limite de conexiones por IP.
 #   - WireGuard: red privada 10.66.0.0/24 con Vps-Central y Vps-WEB (WG_PEERS).
-#   - Paneles: TsBot Control (8443) solo admin; pagos (443) solo desde Cloudflare.
+#   - Paneles: TsBot Control (8443) solo admin. Pagos (443 solo desde Cloudflare): ya NO se abre por defecto
+#     (pay.tsbot.co retirada el 28-09-2026; CLOUDFLARE_IPS="<rangos>" para volver a abrirlo).
 #   - Si WHITELIST_DB no esta vacio, ademas de abrir 5432 a esas IPs configura
 #     PostgreSQL para escuchar de forma remota SOLO desde ellas (listen_addresses
 #     + pg_hba). Deja WHITELIST_DB vacio para mantener la BD solo en localhost.
@@ -59,11 +60,13 @@ WG_PORT="${WG_PORT:-51820}"
 WG_PEERS="${WG_PEERS:-23.26.121.186 141.11.104.194}"
 
 # Paneles web alojados en esta maquina: TsBot Control (8443, solo admin) y pagina de pagos
-# (443, solo desde Cloudflare). Vacio = no se abren.
+# (443, solo desde Cloudflare). Vacio = no se abren. La pagina de pagos (pay.tsbot.co) se retiro el
+# 28-09-2026 (redirige al panel desde Vps-WEB): CLOUDFLARE_IPS vacio por defecto = 443 cerrado.
 WHITELIST_DASH="${WHITELIST_DASH:-172.216.237.49}"
 TCP_DASH="${TCP_DASH:-8443}"
 TCP_PAY="${TCP_PAY:-443}"
-CLOUDFLARE_IPS="${CLOUDFLARE_IPS:-173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22}"
+# rangos de Cloudflare (por si se vuelve a servir algo en 443): 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22
+CLOUDFLARE_IPS="${CLOUDFLARE_IPS:-}"
 
 # 1 = no guardar las reglas (pruebas en un network namespace).
 NO_PERSIST="${NO_PERSIST:-0}"
