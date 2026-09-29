@@ -1,16 +1,16 @@
 #!/opt/tsbot-dash/venv/bin/python
-"""Paso posterior de la ventana Build 2.1 (30-sep-2026). Cron de SISTEMA one-shot a las 10:20 CEST
+"""Paso posterior de la ventana Build 2.2 (30-sep-2026). Cron de SISTEMA one-shot a las 10:20 CEST
 (/etc/cron.d/ts-maint-build21-post-once), despues de ts_maint_build21.py (09:57).
 
 1. Espera (max 30 min) a que ts_maint_build21.py haya terminado.
 2. Lee /var/log/ts_maint_build21.log (ultima ejecucion REAL) y /root/window-build21/state_build21.json.
 3. SOLO si el log tiene "=== COMPLETADO OK ===":
-     - fusiona build21-chat-bot -> main en acrin96/teaspeak_v2-src y acrin96/teaspeak_v2, y
+     - fusiona build22-t23 -> main en acrin96/teaspeak_v2-src y acrin96/teaspeak_v2, y
        ventana-20260930 -> main en acrin96/TsBot-Deploy (fast-forward; si no se puede, merge --no-ff en un
        worktree temporal; si hay conflicto se aborta sin tocar main). Nunca --force.
-     - publica la release v1.4.21-beta-3-build2.1 (latest) con los MISMOS nombres de asset que build2
+     - publica la release v1.4.21-beta-3-build2.2 (latest) con los MISMOS nombres de asset que build2
        (preparados por stage_release_build21.sh en /root/window-build21/release): borrador -> assets -> publicar.
-     - verifica una descarga de releases/latest: el TeaSpeakServer del bundle debe tener el md5 de Build 2.1.
+     - verifica una descarga de releases/latest: el TeaSpeakServer del bundle debe tener el md5 de Build 2.2.
    Si algo de GitHub falla no se reintenta de forma destructiva: se informa en el resumen.
    Con "COMPLETADO CON AVISOS" NO se publica (hay que revisar antes): luego, a mano, --publish-only.
 4. Manda SIEMPRE (tambien si hubo rollback, aborto o no se ejecuto) un WhatsApp final SOLO al admin
@@ -56,15 +56,16 @@ log = base.log
 B1_MD5 = "ef2c609533996e81044b33c7e3c09d71"
 B2_MD5 = "ae2a571c74fa997f84d215104af9f169"
 B21_MD5 = "11e755ad0d84e644e151b056add0a58d"
-B21_SHA256 = "c7e10dcc55ccd1215b29edba4083c17cdd4537cf3a517af5083b2a5afa2ad4a3"
-TAG = "v1.4.21-beta-3-build2.1"
+B22_MD5 = "e407ae2ae16d40a8a78f2b73bc111c08"
+B22_SHA256 = "d19414724f5d62162c3fe1cef88d846dd9179b6d98186b07d6f5951846388487"
+TAG = "v1.4.21-beta-3-build2.2"
 GH_REPO = "acrin96/teaspeak_v2"
 REL_DIR = "/root/window-build21/release"
 BUNDLE = "teaspeak_v2_1.4.21-beta-3_linux_amd64.tar.gz"
 GEO = "teaspeak_v2_geoloc.tar.gz"
 ASSETS = [(BUNDLE, "application/gzip"), (GEO, "application/gzip"), ("SHA256SUMS", "text/plain")]
-REPOS = [("teaspeak_v2-src", "/root/work/teaspeak_v2-src", "build21-chat-bot"),
-         ("teaspeak_v2", "/root/work/teaspeak_v2", "build21-chat-bot"),
+REPOS = [("teaspeak_v2-src", "/root/work/teaspeak_v2-src", "build22-t23"),
+         ("teaspeak_v2", "/root/work/teaspeak_v2", "build22-t23"),
          ("TsBot-Deploy", "/root/work/TsBot-Deploy", "ventana-20260930")]
 GIT_ID = ["-c", "user.name=acrin96", "-c", "user.email=acrin96@users.noreply.github.com"]
 COAUTHOR = "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
@@ -152,7 +153,7 @@ def merge_to_main(name, d, br):
     if r.returncode != 0:
         return f"FALLO (worktree: {clean(r.stderr, 80)})"
     try:
-        msg = f"Merge {br} en main (ventana 30-sep-2026, Build 2.1 en produccion)\n\n{COAUTHOR}"
+        msg = f"Merge {br} en main (ventana 30-sep-2026, Build 2.2 en produccion)\n\n{COAUTHOR}"
         r = git(wt, *GIT_ID, "merge", "--no-ff", "--no-edit", "-m", msg, f"origin/{br}")
         if r.returncode != 0:
             git(wt, "merge", "--abort")
@@ -209,8 +210,8 @@ def staged_ok():
         if not os.path.exists(f"{REL_DIR}/{name}"):
             return False, f"falta {REL_DIR}/{name}"
     got = bundle_bin_md5(f"{REL_DIR}/{BUNDLE}")
-    if got != B21_MD5:
-        return False, f"el bundle preparado trae {got[:8]}, no Build 2.1"
+    if got != B22_MD5:
+        return False, f"el bundle preparado trae {got[:8]}, no Build 2.2"
     sums = {}
     for line in open(f"{REL_DIR}/SHA256SUMS", encoding="utf-8"):
         p = line.split()
@@ -220,23 +221,27 @@ def staged_ok():
         h = hashlib.sha256(open(f"{REL_DIR}/{name}", "rb").read()).hexdigest()
         if sums.get(name) != h:
             return False, f"SHA256SUMS no cuadra con {name}"
-    return True, "assets preparados OK (binario Build 2.1)"
+    return True, "assets preparados OK (binario Build 2.2)"
 
 
 def release_body(src_sha):
     return (
-        "Build 2.1 de TeaSpeak v2 (1.4.21-beta-3 + PostgreSQL): arreglo del chat privado con el bot. "
+        "Build 2.2 de TeaSpeak v2 (1.4.21-beta-3 + PostgreSQL): chat privado con el bot y parada limpia. "
         "**En produccion desde el 30-sep-2026 10:02 CEST.**\n\n"
-        f"Binario `TeaSpeakServer`: md5 `{B21_MD5}`, sha256 `{B21_SHA256}`.\n"
-        f"Fuente: acrin96/teaspeak_v2-src `main` @ `{src_sha}` (rama build21-chat-bot; detalle en docs/BUILD21.md).\n"
+        f"Binario `TeaSpeakServer`: md5 `{B22_MD5}`, sha256 `{B22_SHA256}`.\n"
+        f"Fuente: acrin96/teaspeak_v2-src `main` @ `{src_sha}` (rama build22-t23; detalle en docs/BUILD22.md).\n"
         "Mismo bundle que v1.4.21-beta-3-build2 (libs, recursos, scripts, `config.template.yml`) con SOLO el "
-        "binario sustituido; mismos nombres de asset, asi que `install.sh` (releases/latest) instala Build 2.1.\n\n"
-        "Cambio:\n"
+        "binario sustituido; mismos nombres de asset, asi que `install.sh` (releases/latest) instala Build 2.2.\n\n"
+        "Cambios (sobre Build 2):\n"
         "- T06b: `clientgetids` y `clientgetuidfromclid` vuelven a resolver a los clientes query (el bot) y a los "
         "companeros de un chat privado abierto. El cliente TS3 comprueba cada ~150 s a los companeros de chat que no "
         "tiene a la vista y, desde Build 1 (T06), no recibia respuesta: el chat con el bot se cerraba a los 1-5 min "
         "con \"Chat partner disconnected out of view\". Un cliente oculto (SPY) con el que no chateas sigue sin "
         "poder resolverse por uid ni por clid.\n"
+        "- T23: parada limpia con SIGTERM. Cada parada abortaba (SIGABRT, crash dump) al destruir los bucles de E/S de "
+        "voz con su hilo sin join, antes de vaciar la cola SQL asincrona; ademas un \"lost wakeup\" podia dejar un hilo "
+        "dormido y colgar la parada hasta el SIGKILL. Ahora: join/detach de esos hilos, sin espera perdida, y "
+        "\"Application suspend successful!\" en ~0,3 s.\n"
     )
 
 
@@ -258,7 +263,7 @@ def publish_release(target_sha, src_sha):
     elif code == 404:
         code, rel = api("POST", f"{base_url}/releases", {
             "tag_name": TAG, "target_commitish": target_sha, "draft": True, "prerelease": False,
-            "name": "TeaSpeak v2 1.4.21-beta-3 - Build 2.1 (chat privado con el bot)",
+            "name": "TeaSpeak v2 1.4.21-beta-3 - Build 2.2 (chat con el bot + parada limpia)",
             "body": release_body(src_sha)})
         if code != 201:
             return f"FALLO (crear borrador: HTTP {code} {rel.get('error', '')})", False
@@ -302,9 +307,9 @@ def verify_download(prefix):
     finally:
         if os.path.exists(tmp):
             os.remove(tmp)
-    ok = got == B21_MD5 and latest_tag == TAG
+    ok = got == B22_MD5 and latest_tag == TAG
     if ok:
-        return f"OK ({prefix}; descarga de releases/latest verificada: md5 Build 2.1 {B21_MD5[:8]})", True
+        return f"OK ({prefix}; descarga de releases/latest verificada: md5 Build 2.2 {B22_MD5[:8]})", True
     return f"FALLO ({prefix}; verificacion: latest={latest_tag}, md5 descargado={got[:8]})", False
 
 
@@ -322,9 +327,9 @@ def github_steps():
         git("/root/work/teaspeak_v2", "fetch", "-q", "origin")
         tgt = git("/root/work/teaspeak_v2", "rev-parse", "origin/main").stdout.strip()
         if not items[1][1].startswith(("OK", "(dry)")):
-            tgt = git("/root/work/teaspeak_v2", "rev-parse", "origin/build21-chat-bot").stdout.strip()
+            tgt = git("/root/work/teaspeak_v2", "rev-parse", "origin/build22-t23").stdout.strip()
         if DRY and items[0][1].startswith("(dry)"):
-            src_sha = git("/root/work/teaspeak_v2-src", "rev-parse", "--short", "origin/build21-chat-bot").stdout.strip()
+            src_sha = git("/root/work/teaspeak_v2-src", "rev-parse", "--short", "origin/build22-t23").stdout.strip()
         res, _ = publish_release(tgt, src_sha)
     except Exception as e:  # noqa: BLE001
         res = f"FALLO ({clean(e, 100)})"
@@ -372,12 +377,12 @@ def summary_items(outcome, run_txt, state):
         res = (pc or {}).get("res", {})
         bad = (pc or {}).get("bad", [])
         si = (pc or {}).get("stop_info", {})
-        items.append(("Cambio de binario B2 (ae2a571c) -> B2.1 (11e755ad), chat con el bot",
+        items.append(("Cambio de binario B2 (ae2a571c) -> B2.2 (e407ae2a): chat con el bot (T06b) y parada limpia (T23)",
                       f"OK (parada de B2 en {sw.get('stop_secs')} s)" if sw else "OK"))
-        items.append(("TeaSpeak arriba con Build 2.1",
+        items.append(("TeaSpeak arriba con Build 2.2",
                       ("REVISAR, " if "vservers" in bad else "OK, ") +
                       f"{res.get('vservers')}/{(up or {}).get('expected', 14)} vservers online, {(pc or {}).get('clients')} clientes"))
-        items.append(("Parada de Build 2 (informativo, bug de parada conocido de 1.4.21)",
+        items.append(("Parada de Build 2 (informativo: ultima parada con el bug T23 que corrige Build 2.2)",
                       f"{si.get('b2_stop_secs', '?')} s, dumps={si.get('b2_stop_crash_dumps', '?')}, "
                       f"crash en log={si.get('b2_stop_crash_in_log', '?')}"))
         items.append(("Bot reiniciado", ("OK, " if "bots" not in bad else "REVISAR, ") +
@@ -390,7 +395,7 @@ def summary_items(outcome, run_txt, state):
         return items
 
     # rollback
-    items.append(("Cambio de binario B2 -> B2.1", f"REVERTIDO a Build 2. Motivo: {reason}" if sw else
+    items.append(("Cambio de binario B2 -> B2.2", f"REVERTIDO a Build 2. Motivo: {reason}" if sw else
                   f"no llego a aplicarse. Motivo: {reason}"))
     if outcome == "rollback_ok":
         items.append(("TeaSpeak tras el rollback", "OK, arriba con Build 2 (config.yml del backup)"))
@@ -410,7 +415,7 @@ def live_status():
             for chunk in iter(lambda: f.read(1 << 20), b""):
                 h.update(chunk)
         m = h.hexdigest()
-        name = {B1_MD5: "Build 1", B2_MD5: "Build 2", B21_MD5: "Build 2.1"}.get(m, f"DESCONOCIDO {m[:8]}")
+        name = {B1_MD5: "Build 1", B2_MD5: "Build 2", B21_MD5: "Build 2.1", B22_MD5: "Build 2.2"}.get(m, f"DESCONOCIDO {m[:8]}")
     except OSError as e:
         name = f"ilegible ({clean(e, 40)})"
     act = {u: subprocess.run(["systemctl", "is-active", u], capture_output=True, text=True).stdout.strip()
@@ -431,7 +436,7 @@ def main():
     log(f"=== post_build21 {'(DRY)' if DRY else '(REAL)'}{' publish-only' if args.publish_only else ''} ===")
     if args.publish_only:
         items = github_steps()
-        text = compose("Hola, resultado de la publicacion de Build 2.1 (repos y release):", items)
+        text = compose("Hola, resultado de la publicacion de Build 2.2 (repos y release):", items)
         log("resumen:\n" + text)
         base.wa_send(text)
         return 0
@@ -453,7 +458,7 @@ def main():
         items.append(("Repos y release", "OMITIDO hasta revisar los avisos; despues: "
                       "/root/window-build21/post_build21.py --publish-only"))
     text = compose(f"Hola, resumen final del mantenimiento de TeaSpeak del {args.date[8:10]}-{args.date[5:7]} "
-                   f"(Build 2.1, chat con el bot): {HEAD[outcome]}", items)
+                   f"(Build 2.2: chat con el bot + parada limpia): {HEAD[outcome]}", items)
     log("resumen:\n" + text)
     ok = base.wa_send(text)
     log(f"=== post_build21 FIN (whatsapp={'dry' if DRY else ok}) ===")

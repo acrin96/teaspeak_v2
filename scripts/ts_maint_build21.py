@@ -1,15 +1,19 @@
 #!/opt/tsbot-dash/venv/bin/python
-"""Mantenimiento de TeaSpeak: BUILD 2.1 (chat privado con el bot), en UN solo reinicio.
+"""Mantenimiento de TeaSpeak: BUILD 2.2 (chat privado con el bot + parada limpia), en UN solo reinicio.
 
 APROBADO por el dueno. PROGRAMADO para el 30-sep-2026 con cron de SISTEMA one-shot
 (/etc/cron.d/ts-maint-build21-once, 09:57 CEST: aviso; corte a las 10:02). El resumen final por WhatsApp lo
 manda post_build21.py (cron one-shot 10:20), que tambien fusiona las ramas y publica la release si todo fue OK.
+(Los nombres de fichero y de cron siguen siendo "build21": el 29-sep por la noche la ventana paso de Build 2.1 a
+Build 2.2 = Build 2.1 + T23, aprobado por el dueno, con las mismas rutas.)
 
 Cambio (nada mas):
-  Binario Build 2.1 (md5 11e755ad) sobre Build 2 (md5 ae2a571c): T06b, commit 2e02f24 de teaspeak_v2-src
-  (rama build21-chat-bot). clientgetids / clientgetuidfromclid vuelven a resolver a los clientes query (el bot)
-  y a los companeros de chat privado abierto, asi que el chat con el bot ya no se cierra con "Chat partner
-  disconnected out of view". SIN cambios de config.yml ni de hilos (el config.yml se respalda igualmente).
+  Binario Build 2.2 (md5 e407ae2a) sobre Build 2 (md5 ae2a571c), rama build22-t23 de teaspeak_v2-src:
+  - T06b (2e02f24): clientgetids / clientgetuidfromclid vuelven a resolver a los clientes query (el bot) y a los
+    companeros de chat privado abierto: el chat con el bot ya no se cierra con "Chat partner disconnected out of view".
+  - T23 (be93ccd): parada limpia con SIGTERM (join/detach de los hilos de los IOEventLoop de voz + lost wakeup), sin
+    abort ni crash dump, y con la cola SQL vaciada al parar.
+  SIN cambios de config.yml ni de hilos (el config.yml se respalda igualmente).
 
 Rutina acordada: poke a todos los conectados (SPY excluido; nick "TsBot Alert") ~5 min antes + 5 WhatsApp
 de progreso SOLO al admin (admin_wa), backup (binario, config.yml, pg_dump), parar, cambiar binario,
@@ -17,10 +21,10 @@ arrancar, health-check, reinicio del bot y verificacion. ROLLBACK AUTOMATICO (bi
 del backup) si falla el arranque, el health-check o la estabilidad. Guarda "touched": si falla antes de parar
 TeaSpeak no se revierte ni se reinicia nada.
 
-Parada del binario VIEJO (Build 2): la parada con SIGTERM de 1.4.21 aborta al final (SIGABRT al destruir los
-IOEventLoop de VoiceIOManager, bug de upstream; ver docs/BUILD21.md) y deja un crash dump + "The server
-crashed!" en el log ANTERIOR. Eso se INFORMA (WhatsApp, estado) pero NO cuenta como fallo si el binario nuevo
-arranca sano. Los crashes del log NUEVO y los dumps posteriores al arranque si cuentan.
+Parada del binario VIEJO (Build 2): la parada con SIGTERM de Build 2 aborta al final (T23: SIGABRT al destruir
+los IOEventLoop de VoiceIOManager, bug de upstream que arregla este mismo Build 2.2; ver docs/BUILD22.md) y deja un
+crash dump + "The server crashed!" en el log ANTERIOR. Eso se INFORMA (WhatsApp, estado) pero NO cuenta como fallo
+si el binario nuevo arranca sano. Los crashes del log NUEVO y los dumps posteriores al arranque si cuentan.
 
 Post-checks (leidos de /opt/teaspeak/logs, del log de PostgreSQL y de /proc; no de journalctl):
   vservers online, errores conocidos en PG, crash en el log nuevo, crash dumps nuevos desde el arranque,
@@ -55,8 +59,8 @@ CHECK = "--check" in sys.argv
 base.CHECK = CHECK
 LIVE = "/opt/teaspeak/TeaSpeakServer"
 CONFIG = "/opt/teaspeak/config.yml"
-NEW = "/root/build-out/build21/TeaSpeakServer.build21"
-NEW_MD5 = "11e755ad0d84e644e151b056add0a58d"        # Build 2.1 = Build 2 + T06b (2e02f24, 29-sep 18:59)
+NEW = "/root/build-out/build22/TeaSpeakServer.build22"
+NEW_MD5 = "e407ae2ae16d40a8a78f2b73bc111c08"        # Build 2.2 = Build 2 + T06b (2e02f24) + T23 (be93ccd), 29-sep 20:20
 EXPECTED_LIVE = "ae2a571c74fa997f84d215104af9f169"  # Build 2: debe estar ya en vivo
 BACKUP_DIR = "/opt/teaspeak/backups"
 PG_LOG = "/var/log/postgresql/postgresql-13-main.log"
@@ -207,18 +211,18 @@ async def main():
 
     # 1) binario nuevo
     if not os.path.exists(NEW) or md5(NEW) != NEW_MD5:
-        problems.append("binario Build 2.1 ausente o con hash inesperado")
+        problems.append("binario Build 2.2 ausente o con hash inesperado")
     else:
         r = bash(f"LD_LIBRARY_PATH=/opt/teaspeak/libs ldd {NEW} | grep -c 'not found' || true")
         if r.stdout.strip() not in ("0", ""):
-            problems.append(f"al binario Build 2.1 le faltan librerias ({r.stdout.strip()})")
+            problems.append(f"al binario Build 2.2 le faltan librerias ({r.stdout.strip()})")
 
-    # 2) guarda: en vivo tiene que estar Build 2 (si ya esta Build 2.1, no se hace nada)
+    # 2) guarda: en vivo tiene que estar Build 2 (si ya esta Build 2.2, no se hace nada)
     live = md5(LIVE)
     if live == NEW_MD5:
-        problems.append("Build 2.1 (11e755ad) YA esta en vivo: no hay nada que cambiar")
+        problems.append("Build 2.2 (e407ae2a) YA esta en vivo: no hay nada que cambiar")
     elif live != EXPECTED_LIVE:
-        problems.append(f"el binario vivo es {live[:8]}, no Build 2 ({EXPECTED_LIVE[:8]}): Build 2.1 va DESPUES de Build 2")
+        problems.append(f"el binario vivo es {live[:8]}, no Build 2 ({EXPECTED_LIVE[:8]}): Build 2.2 va DESPUES de Build 2")
 
     # 3) config.yml: no se toca; solo que exista y sea YAML valido (se respalda y se restaura en el rollback)
     try:
@@ -276,14 +280,15 @@ async def main():
     if problems:
         msg = "; ".join(problems)[:300]
         log(f"ABORTADO sin tocar nada: {msg}")
-        wa_send(f"🚨 [Mantenimiento Build 2.1] Abortado ANTES de empezar (no se toco nada):\n\n{msg}")
+        wa_send(f"🚨 [Mantenimiento Build 2.2] Abortado ANTES de empezar (no se toco nada):\n\n{msg}")
         outcome("abortado_preflight", msg)
         log("=== ABORTADO SIN TOCAR NADA (preflight) ===")
         return 2
 
     ok_wa = wa_send("🛠️ [Aviso] Mantenimiento de TeaSpeak en ~5 min. Aviso por poke a los conectados.\n\n"
-                    "Build 2.1: arreglo del chat privado con el bot (se cerraba a los 1-5 min con "
-                    "'Chat partner disconnected out of view'). Sin cambios de configuracion.\n\n"
+                    "Build 2.2: arreglo del chat privado con el bot (se cerraba a los 1-5 min con "
+                    "'Chat partner disconnected out of view') y parada limpia de TeaSpeak (sin crash al apagar y sin "
+                    "perder escrituras en cola). Sin cambios de configuracion.\n\n"
                     "Corte de voz ~1-2 min; todos reconectan solos.")
     poked = await base.warn_poke("[b][color=red]Maintenance in 5 min: ~2 min downtime, you will reconnect automatically.[/color][/b]")
     log(f"pokeados: {poked}")
@@ -311,7 +316,7 @@ async def main():
         log(f"backup bin -> {bak_bin} ; config -> {bak_cfg} ; dump -> {dump}")
         st("backups", "ok", bin=bak_bin, cfg=bak_cfg, dump=dump, dump_mb=round(os.path.getsize(dump) / 1048576, 1))
 
-        wa_send("🔄 [2/5] Parando TeaSpeak y cambiando el binario (Build 2 -> Build 2.1)...")
+        wa_send("🔄 [2/5] Parando TeaSpeak y cambiando el binario (Build 2 -> Build 2.2)...")
         threads_before = ts_threads()
         since = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         since_epoch = time.time()
@@ -327,7 +332,7 @@ async def main():
         st("swap", "ok", from_md5=EXPECTED_LIVE, to_md5=NEW_MD5, stop_secs=stop_secs, stop_dumps=stop_dumps)
         start_epoch = time.time()
         run(f"systemctl start {TS_SERVICE}")
-        log(f"teaspeak arrancado con Build 2.1 (parada de B2: {stop_secs}s, dumps={stop_dumps}); verificando salud...")
+        log(f"teaspeak arrancado con Build 2.2 (parada de B2: {stop_secs}s, dumps={stop_dumps}); verificando salud...")
 
         ok, info = await base.ts_healthy(expected)
         if not ok:
@@ -378,8 +383,8 @@ async def main():
         st("postchecks", "ok" if not bad else "revisar", res=res, stop_info=info_stop, bad=bad, clients=clients)
         flag = "⚠️ REVISAR: " + ", ".join(bad) + ".\n\n" if bad else ""
         stop_note = (f"Parada de B2: {stop_secs}s, dumps={stop_dumps}, crash_log={info_stop['b2_stop_crash_in_log']} "
-                     "(informativo: bug de parada conocido de 1.4.21, no del Build 2.1).")
-        wa_send(f"🎉 [5/5] Mantenimiento Build 2.1 COMPLETADO.\n\n{flag}"
+                     "(informativo: es la ultima parada con el bug T23, que Build 2.2 corrige).")
+        wa_send(f"🎉 [5/5] Mantenimiento Build 2.2 COMPLETADO.\n\n{flag}"
                 f"{clients} clientes online ({vs}/{expected} vservers). Bots {n_bots}/{tot_bots}. "
                 f"Hilos {threads_before} -> {threads_after}.\n\n"
                 f"pg_err={res['pg_log_errors']} crash_nuevos={res['ts_log_crashes_new']}/{res['crash_dumps_new']} "
@@ -393,7 +398,7 @@ async def main():
         log(f"!!! FALLO: {reason} -> ROLLBACK")
         try:
             if not touched:
-                wa_send(f"❌ [Mantenimiento Build 2.1] Abortado ANTES de tocar TeaSpeak: {reason}.\n\n"
+                wa_send(f"❌ [Mantenimiento Build 2.2] Abortado ANTES de tocar TeaSpeak: {reason}.\n\n"
                         "No se reinicio nada; TeaSpeak y bot siguen igual.")
                 outcome("abortado_sin_tocar", reason)
                 log("=== ABORTADO SIN TOCAR NADA ===")
@@ -409,18 +414,18 @@ async def main():
             ok, info = await base.ts_healthy(expected)
             if ok and restored:
                 run(f"systemctl restart {BOT_SERVICE}")
-                wa_send(f"❌ [Mantenimiento Build 2.1] Fallo: {reason}.\n\nREVERTI al binario Build 2 y al config.yml "
+                wa_send(f"❌ [Mantenimiento Build 2.2] Fallo: {reason}.\n\nREVERTI al binario Build 2 y al config.yml "
                         f"del backup. TeaSpeak ARRIBA y estable ({info}). Bot reiniciado.")
                 outcome("rollback_ok", f"{reason} | tras rollback: {info}")
                 log("=== ROLLBACK OK ===")
                 return 1
-            wa_send(f"🚨 [Mantenimiento Build 2.1] CRITICO: fallo el cambio Y el rollback ({info}; restaurado={restored}).\n\n"
+            wa_send(f"🚨 [Mantenimiento Build 2.2] CRITICO: fallo el cambio Y el rollback ({info}; restaurado={restored}).\n\n"
                     "INTERVENCION MANUAL YA (docs/VENTANA_20260930.md en TsBot-Deploy, rollback manual).")
             outcome("rollback_fallido", f"{reason} | rollback: {info}; restaurado={restored}")
             log("=== ROLLBACK FALLIDO ===")
             return 3
         except Exception as ex2:
-            wa_send(f"🚨 [Mantenimiento Build 2.1] CRITICO: excepcion en el rollback ({str(ex2)[:150]}). INTERVENCION MANUAL YA.")
+            wa_send(f"🚨 [Mantenimiento Build 2.2] CRITICO: excepcion en el rollback ({str(ex2)[:150]}). INTERVENCION MANUAL YA.")
             try:
                 outcome("rollback_fallido", f"{reason} | excepcion en rollback: {str(ex2)[:150]}")
             except Exception:  # noqa: BLE001
