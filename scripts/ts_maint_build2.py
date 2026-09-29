@@ -64,7 +64,8 @@ CRASH_DIR = "/opt/teaspeak/crash_dumps"
 STATE = "/root/window-build2/state_build2.json"
 TS_SERVICE, BOT_SERVICE = "teaspeak", "tsbot"
 WARN_SECONDS = int(os.environ.get("WARN_SECONDS", "300"))
-EXPECTED_VS = int(os.environ.get("EXPECTED_VS", "14"))
+# Lista de números válidos ("14,15"): 29-sep, pedido de prueba del autoservicio que puede existir o no.
+EXPECTED_VS = {int(x) for x in os.environ.get("EXPECTED_VS", "14").split(",") if x.strip()}
 MIN_THREAD_DROP = 15   # staging: 85 -> 59 (26 menos)
 log, run, wa_send = base.log, base.run, base.wa_send
 CRASH_PAT = "'Wrote crash dump|The server crashed|segfault|Assertion|terminate called'"
@@ -326,9 +327,9 @@ async def main():
 
     threads_now = ts_threads()
     expected, clients = await base.count_clients_expected()
-    log(f"vservers={expected} (esperados {EXPECTED_VS}) clientes={clients} live_md5={live[:8]} hilos_ahora={threads_now}")
-    if expected != EXPECTED_VS:
-        problems.append(f"hay {expected} vservers corriendo, se esperan {EXPECTED_VS}")
+    log(f"vservers={expected} (esperados {sorted(EXPECTED_VS)}) clientes={clients} live_md5={live[:8]} hilos_ahora={threads_now}")
+    if expected not in EXPECTED_VS:
+        problems.append(f"hay {expected} vservers corriendo, se esperan {sorted(EXPECTED_VS)}")
 
     if CHECK:
         ok, info = await base.ts_healthy(expected, timeout=20)
